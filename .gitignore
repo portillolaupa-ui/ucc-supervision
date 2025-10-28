@@ -1,0 +1,33 @@
+# === Entornos virtuales ===
+venv/
+.env/
+.venv/
+
+# === Archivos de caché de Python ===
+__pycache__/
+*.py[cod]
+*$py.class
+
+# === Configuración local ===
+*.env
+.DS_Store
+Thumbs.db
+
+# === Archivos de IDE ===
+.vscode/
+.idea/
+
+# === Compilaciones o distribuciones ===
+build/
+dist/
+*.egg-info/
+
+# === Pruebas ===
+.pytest_cache/
+.coverage
+
+# === Documentación generada ===
+docs/_build/
+
+# === Jupyter ===
+.ipynb_checkpoints
