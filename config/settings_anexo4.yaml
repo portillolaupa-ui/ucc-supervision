@@ -1,0 +1,32 @@
+metadatos:
+  unidad_territorial: "B5"
+  provincia: "G5"
+  distrito: "J5"
+  fecha: "K6"
+  supervisor: "C7"
+
+items:
+  col_inicio: 3    # Columna C
+  col_fin: 16       # Columna P
+  rangos:
+    - fila_inicio: 12
+      fila_fin: 23
+    - fila_inicio: 25
+      fila_fin: 30
+
+limites:
+  max_por_item: 2
+
+clasificacion:
+  - max: 25
+    categoria: "Deficiente"
+  - max: 58
+    categoria: "Regular"
+  - max: 91
+    categoria: "Bueno"
+  - max: 100
+    categoria: "Excelente"
+
+salida:
+  carpeta: "data/processed/anexo4"
+  archivo_excel: "anexo4_consolidado.xlsx"

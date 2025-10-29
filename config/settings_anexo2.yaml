@@ -1,0 +1,30 @@
+# Configuración de posiciones fijas para la ficha de supervisión - ANEXO 2
+
+metadatos:
+  unidad_territorial: "C2"
+  distrito: "E2"
+  supervisor: "C3"
+  fecha: "C4"
+
+# Rangos de filas donde están los ítems (discontinuos)
+items:
+  rangos:
+    - { fila_inicio: 9,  fila_fin: 13 }
+    - { fila_inicio: 16, fila_fin: 18 }
+    - { fila_inicio: 21, fila_fin: 23 }
+    - { fila_inicio: 25, fila_fin: 33 }
+  col_inicio: 3   # Columna C
+  col_fin: 7      # Columna G
+
+limites:
+  max_por_item: 2
+
+clasificacion:
+  - { max: 10, categoria: "DEFICIENTE" }
+  - { max: 20, categoria: "REGULAR" }
+  - { max: 30, categoria: "BUENO" }
+  - { max: 999, categoria: "EXCELENTE" }
+
+salida:
+  carpeta: "data/processed/anexo2"
+  archivo_excel: "consolidado_anexo2.xlsx"

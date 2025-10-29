@@ -1,0 +1,41 @@
+metadatos:
+  responsable: "B2"
+  comunidad: "B3"
+  fecha_sesion: "B4"
+  sesion_observada: "B5"
+  facilitador: "B6"
+
+secciones:
+  - nombre: "ROL_DEL_GESTOR_LOCAL"
+    fila_inicio: 9
+    fila_fin: 14
+    col_inicio: 3
+    col_fin: 6
+    clasificacion:
+      - { max: 4, categoria: "Desempeño bajo", descripcion: "Presenta deficiencias significativas en su labor y necesita intervención formativa." }
+      - { max: 8, categoria: "Desempeño medio", descripcion: "Cumple parcialmente los criterios; requiere seguimiento y apoyo técnico." }
+      - { max: 12, categoria: "Alto desempeño", descripcion: "Cumple con la mayoría de los criterios establecidos y demuestra liderazgo." }
+
+  - nombre: "FACILITADOR_EXTERNO"
+    fila_inicio: 24
+    fila_fin: 29
+    col_inicio: 3
+    col_fin: 6
+    clasificacion:
+      - { max: 4, categoria: "Desempeño bajo", descripcion: "Presenta deficiencias importantes en la planificación o conducción de la sesión." }
+      - { max: 8, categoria: "Desempeño medio", descripcion: "Cumple parcialmente los criterios; requiere fortalecer algunos aspectos." }
+      - { max: 12, categoria: "Alto desempeño", descripcion: "Cumple consistentemente con los criterios de una facilitación efectiva." }
+
+  - nombre: "MONITOREO_CTZ"
+    fila_inicio: 40
+    fila_fin: 44
+    col_inicio: 3
+    col_fin: 6
+    clasificacion:
+      - { max: 3, categoria: "Gestión deficiente", descripcion: "La gestión presenta debilidades significativas. La articulación con equipos locales es escasa o inexistente. No hay evidencia clara de liderazgo ni acompañamiento técnico diferenciado. Las acciones son reactivas y no se promueve el trabajo colaborativo." }
+      - { max: 7, categoria: "Gestión en desarrollo", descripcion: "Existe articulación parcial con actores y equipos locales. Se evidencia liderazgo en algunas acciones, pero sin sostenibilidad ni sistematicidad. El acompañamiento técnico se realiza de manera ocasional o no diferenciada según las necesidades del contexto. La comunicación es funcional pero no constante." }
+      - { max: 10, categoria: "Gestión estratégica y articulador", descripcion: "El coordinador técnico zonal demuestra liderazgo activo y sostenido. Promueve la articulación efectiva entre niveles (local, regional, institucional). Implementa acompañamiento diferenciado según diagnóstico y necesidades. Genera compromiso, autonomía y resultados medibles en la implementación. La comunicación es fluida, oportuna y orientada a la mejora continua." }
+
+salida:
+  carpeta: "data/processed/anexo3"
+  archivo_excel: "consolidado_anexo3.xlsx"

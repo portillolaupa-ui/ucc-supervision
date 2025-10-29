@@ -1,0 +1,7 @@
+metadatos:
+  unidad_territorial: "UNIDAD TERRITORIAL:"
+  fecha: "FECHA:"
+
+salida:
+  carpeta: "data/processed/anexo5"
+  archivo_excel: "anexo5_consolidado.xlsx"
