@@ -1,20 +1,17 @@
-# Configuración de posiciones fijas para la ficha de supervisión - ANEXO 2
-
 metadatos:
   unidad_territorial: "C2"
   distrito: "E2"
   supervisor: "C3"
   fecha: "C4"
 
-# Rangos de filas donde están los ítems (discontinuos)
-items:
+estructura_items:
   rangos:
     - { fila_inicio: 9,  fila_fin: 13 }
     - { fila_inicio: 16, fila_fin: 18 }
     - { fila_inicio: 21, fila_fin: 23 }
     - { fila_inicio: 25, fila_fin: 33 }
-  col_inicio: 3   # Columna C
-  col_fin: 7      # Columna G
+  col_inicio: 3
+  col_fin: 7
 
 limites:
   max_por_item: 2
@@ -23,8 +20,30 @@ clasificacion:
   - { max: 10, categoria: "DEFICIENTE" }
   - { max: 20, categoria: "REGULAR" }
   - { max: 30, categoria: "BUENO" }
-  - { max: 999, categoria: "EXCELENTE" }
+  - { max: 40, categoria: "EXCELENTE" }
 
 salida:
   carpeta: "data/processed"
-  archivo_excel: "consolidado_anexo2.xlsx"
+  archivo_excel: "anexo2_consolidado.xlsx"
+
+items_nombres:
+  ITEM_1: "La programación mensual del gestor se relaciona con la ejecución del acompañamiento al hogar."
+  ITEM_2: "Muestra los formatos o herramientas usados en la supervisión de gestores."
+  ITEM_3: "Cuenta con evidencia de articulación territorial con instituciones para cierre de brechas y gestión de alertas."
+  ITEM_4: "Tiene evidencia de asistencia técnica a gestores según nudos críticos del último bimestre."
+  ITEM_5: "Cuenta con evidencia de seguimiento y medidas correctivas ante hallazgos de sede central."
+  ITEM_6: "Cuenta con programación de hogares priorizados para acompañamiento (excel, foto o pdf)."
+  ITEM_7: "Gestiona alertas: las identificadas con más de 15 días están derivadas en el módulo."
+  ITEM_8: "Registra la actividad en el aplicativo dentro de 24 horas (máximo 7 días si no hay conectividad)."
+  ITEM_9: "El gestor local la visitó en el último mes."
+  ITEM_10: "Recuerda el tema tratado en la última visita."
+  ITEM_11: "Asumió un compromiso en la última visita (verificar cartilla u otra evidencia)."
+  ITEM_12: "Promueve la participación del padre u otro familiar presente durante la visita."
+  ITEM_13: "Confirma o identifica alertas sobre salud, violencia, educación u otros temas del hogar."
+  ITEM_14: "Solicita y revisa tarjeta prenatal o CRED, y DNI del niño/niña si corresponde."
+  ITEM_15: "Verifica el consumo de hierro (frasco, MMN o tabletas), según corresponda."
+  ITEM_16: "Explora saberes previos mediante preguntas sobre el tema."
+  ITEM_17: "Brinda el tema según la alerta, edad o etapa de vida del hogar."
+  ITEM_18: "Usa materiales educativos (rotafolio) durante la visita."
+  ITEM_19: "Verifica la comprensión del tema mediante preguntas."
+  ITEM_20: "Al cerrar la visita, promueve compromisos y usa la cartilla del hogar o similar."

@@ -1,0 +1,30 @@
+# ============================================================
+# 🧭 CONFIGURACIÓN GENERAL DEL DASHBOARD UCC 2025
+# ============================================================
+
+institucion:
+  nombre: "Ministerio de Desarrollo e Inclusión Social del Perú"
+  programa: "Programa Nacional de Apoyo Directo a los más Pobres – JUNTOS"
+  unidad: "Unidad de Cumplimiento de Corresponsabilidades (UCC)"
+
+paleta_colores:
+  primario: "#004C97"
+  secundario: "#00ADEF"
+  neutro: "#F7F9FB"
+  alerta: "#D9534F"
+  exito: "#2E7D32"
+
+archivos:
+  anexo2: "data/processed/anexo2_consolidado.xlsx"
+  anexo3_ctz: "data/processed/anexo3_monitoreo_ctz_consolidado.xlsx"
+  anexo3_fac: "data/processed/anexo3_facilitador_externo_consolidado.xlsx"
+  anexo3_rol: "data/processed/anexo3_rol_del_gestor_local_consolidado.xlsx"
+  anexo5: "data/processed/anexo5_consolidado.xlsx"
+
+# Tiempo en minutos para refrescar cache (60 min = 1 hora)
+cache:
+  ttl_minutos: 60
+
+# Seguridad
+credenciales:
+  admin_password: "ucc2025"  # puedes sobrescribirlo en .streamlit/secrets.toml
