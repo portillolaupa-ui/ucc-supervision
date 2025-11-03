@@ -3,5 +3,5 @@ metadatos:
   fecha: "FECHA:"
 
 salida:
-  carpeta: "data/processed/anexo5"
+  carpeta: "data/processed"
   archivo_excel: "anexo5_consolidado.xlsx"

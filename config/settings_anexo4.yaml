@@ -28,5 +28,5 @@ clasificacion:
     categoria: "Excelente"
 
 salida:
-  carpeta: "data/processed/anexo4"
+  carpeta: "data/processed"
   archivo_excel: "anexo4_consolidado.xlsx"

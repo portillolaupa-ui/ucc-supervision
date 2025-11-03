@@ -171,10 +171,17 @@ if registros:
     nombre_archivo = "anexo2_consolidado.xlsx"
     salida_excel = salida_dir / nombre_archivo
 
-    # Si ya existe un consolidado previo, acumula sin duplicar
     if salida_excel.exists():
         df_prev = pd.read_excel(salida_excel)
+
+        # Normalizar los campos clave para comparar correctamente
+        for col in ["Archivo", "Región", "Mes", "Año"]:
+            df_prev[col] = df_prev[col].astype(str).str.strip().str.upper()
+            df_total[col] = df_total[col].astype(str).str.strip().str.upper()
+
         df_total = pd.concat([df_prev, df_total], ignore_index=True)
+
+        # Eliminar duplicados después de la normalización
         df_total.drop_duplicates(subset=["Archivo", "Región", "Mes", "Año"], inplace=True)
 
     df_total.to_excel(salida_excel, index=False)

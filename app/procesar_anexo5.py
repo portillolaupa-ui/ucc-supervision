@@ -87,7 +87,6 @@ def procesar_tabla(raw_data, meta, region, mes, anio, archivo):
             "Mes": mes,
             "Región": region,
             "Archivo": archivo,
-            "N°": fila[0],
             "PUNTOS_CRITICOS": fila[1],
             "ACUERDOS_MEJORA": fila[2],
             "RESPONSABLE": fila[3],
@@ -148,8 +147,19 @@ if registros:
 
     if salida_excel.exists():
         df_prev = pd.read_excel(salida_excel)
+
+        # 🔹 Normalizar campos clave para comparar correctamente
+        for col in ["Archivo", "Región", "Mes", "Año"]:
+            df_prev[col] = df_prev[col].astype(str).str.strip().str.upper()
+            df_total[col] = df_total[col].astype(str).str.strip().str.upper()
+
         df_total = pd.concat([df_prev, df_total], ignore_index=True)
-        df_total.drop_duplicates(subset=["Archivo", "Región", "Mes", "Año"], inplace=True)
+
+        # 🔹 Eliminar duplicados reales, manteniendo todas las filas dentro del mismo archivo
+        df_total.drop_duplicates(
+            subset=["Archivo", "Región", "Mes", "Año", "PUNTOS_CRITICOS"],
+            inplace=True
+        )
 
     df_total.to_excel(salida_excel, index=False)
     log(f"Consolidado actualizado: {salida_excel}", "OK")

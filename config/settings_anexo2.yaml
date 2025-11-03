@@ -26,5 +26,5 @@ clasificacion:
   - { max: 999, categoria: "EXCELENTE" }
 
 salida:
-  carpeta: "data/processed/anexo2"
+  carpeta: "data/processed"
   archivo_excel: "consolidado_anexo2.xlsx"

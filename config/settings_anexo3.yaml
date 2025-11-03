@@ -37,5 +37,5 @@ secciones:
       - { max: 10, categoria: "Gestión estratégica y articulador", descripcion: "El coordinador técnico zonal demuestra liderazgo activo y sostenido. Promueve la articulación efectiva entre niveles (local, regional, institucional). Implementa acompañamiento diferenciado según diagnóstico y necesidades. Genera compromiso, autonomía y resultados medibles en la implementación. La comunicación es fluida, oportuna y orientada a la mejora continua." }
 
 salida:
-  carpeta: "data/processed/anexo3"
+  carpeta: "data/processed"
   archivo_excel: "consolidado_anexo3.xlsx"

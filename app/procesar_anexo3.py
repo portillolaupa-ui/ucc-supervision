@@ -176,13 +176,21 @@ for seccion, registros in consolidado_por_seccion.items():
     nombre_archivo = f"anexo3_{seccion.lower().replace(' ', '_')}_consolidado.xlsx"
     salida_excel = salida_dir / nombre_archivo
 
+    # --- Control de duplicados dentro de cada sección ---
     if salida_excel.exists():
         df_prev = pd.read_excel(salida_excel)
+
+        # Normalizar campos clave para comparación correcta
+        for col in ["Archivo", "Región", "Mes", "Año"]:
+            df_prev[col] = df_prev[col].astype(str).str.strip().str.upper()
+            df_nuevo[col] = df_nuevo[col].astype(str).str.strip().str.upper()
+
         df_total = pd.concat([df_prev, df_nuevo], ignore_index=True)
         df_total.drop_duplicates(subset=["Archivo", "Región", "Mes", "Año"], inplace=True)
     else:
         df_total = df_nuevo
 
+    # Guardar consolidado
     df_total.to_excel(salida_excel, index=False)
     log(f"Consolidado actualizado: {salida_excel}", "OK")
     log(f"Total de registros en {seccion}: {len(df_total)}", "INFO")
