@@ -6,8 +6,8 @@ metadatos:
   supervisor: "C7"
 
 items:
-  col_inicio: 3    # Columna C
-  col_fin: 16       # Columna P
+  col_inicio: 3
+  col_fin: 16
   rangos:
     - fila_inicio: 12
       fila_fin: 23
@@ -30,3 +30,23 @@ clasificacion:
 salida:
   carpeta: "data/processed"
   archivo_excel: "anexo4_consolidado.xlsx"
+
+items_nombres:
+  ITEM_1: "Desarrolla temas priorizados para hogares con adolescentes en VD u OT."
+  ITEM_2: "Participa en reuniones de articulación del último bimestre e incluye el abordaje del Proyecto Vida Adolescente (considerar actas de abril)."
+  ITEM_3: "Gestiona actividades de habilidades socioemocionales (microcursos, sesiones, encuentros) y registra asistencia."
+  ITEM_4: "Gestiona actividades que promueven el acceso al paquete integral de salud del adolescente y cuenta con evidencia."
+  ITEM_5: "Gestiona ferias informativas o de oferta educativa y registra asistencia de participantes."
+  ITEM_6: "Gestiona ferias 'Mi Vocación, Mi Futuro' (orientación, oferta educativa, simulacro ENP) y registra asistencia por componente."
+  ITEM_7: "Gestiona actividades que promueven acceso a servicios de orientación vocacional y cuenta con evidencia."
+  ITEM_8: "Analiza y distribuye al equipo el nominal de potenciales postulantes a Beca 18."
+  ITEM_9: "Elabora el reporte de postulantes orientados para inscripción a Beca 18."
+  ITEM_10: "Promueve la inscripción de postulantes a Beca 18 en el programa de preparación para el ENP."
+  ITEM_11: "Analiza y da seguimiento a indicadores y resultados para mejorar el desempeño territorial."
+  ITEM_12: "Registra intervenciones colectivas en el módulo de acciones colectivas tras la actividad."
+  ITEM_13: "Coordina reuniones con IALDIS/IARDIS sobre intervenciones de Mi Independencia Económica."
+  ITEM_14: "Coordina capacitaciones para jóvenes y adultos en gestión de negocios y habilidades productivas."
+  ITEM_15: "Coordina capacitaciones para hogares Juntos en cursos de empleabilidad."
+  ITEM_16: "Coordina la participación de hogares con negocios en espacios de intercambio comercial."
+  ITEM_17: "Coordina actividades para que los hogares reciban información sobre servicios financieros."
+  ITEM_18: "Registra en el módulo de acciones colectivas las actividades desarrolladas tras su ejecución."

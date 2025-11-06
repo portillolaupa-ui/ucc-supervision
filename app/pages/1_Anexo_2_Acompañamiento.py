@@ -1,103 +1,388 @@
-# app/pages/1_Anexo_2_Acompañamiento.py
+# ==============================================================
+# MONITOREO A LAS ACCIONES DE ACOMPAÑAMIENTO AL HOGAR
+# CON GESTIÓN TERRITORIAL – ANEXO 2 (versión final optimizada)
+# ==============================================================
+
 import streamlit as st
-import plotly.express as px
+import pandas as pd
+import plotly.graph_objects as go
 from pathlib import Path
 import yaml
-import pandas as pd
-
-from utils.style import aplicar_estilo
 from utils.loaders import cargar_datos
-from utils.normalizers import normalizar_anexo2
+from utils.style import aplicar_estilos
 
-aplicar_estilo()
-st.title("Anexo 2 – Acompañamiento al Hogar con Gestión Territorial")
+# ==============================================================
+# CONFIGURACIÓN DE PÁGINA
+# ==============================================================
 
-# --- Cargar data
+st.set_page_config(
+    page_title="Anexo 2 – Acompañamiento al Hogar",
+    page_icon="📋",
+    layout="wide"
+)
+aplicar_estilos()
+
+# ==============================================================
+# CABECERA
+# ==============================================================
+
+st.title("Acompañamiento al Hogar con Gestión Territorial")
+st.markdown("<br>", unsafe_allow_html=True)
+
+# ==============================================================
+# CARGA DE DATOS
+# ==============================================================
+
 data = cargar_datos()
 df = data.get("a2")
 
-if df is None or not isinstance(df, pd.DataFrame):
-    st.warning("No se encontró el archivo del Anexo 2 en data/processed/anexo2_consolidado.xlsx")
+if df is None:
+    st.warning("⚠️ No se encontró el archivo `anexo2_consolidado.xlsx` en `/data/processed/`.")
     st.stop()
 
-df = normalizar_anexo2(df)
+# ==============================================================
+# CARGAR YAML DE NOMBRES DE ÍTEMS
+# ==============================================================
 
-# --- Cargar YAML (items_nombres)
-BASE_DIR = Path(__file__).resolve().parents[1]
-CONFIG_PATH_A2 = BASE_DIR / "config" / "settings_anexo2.yaml"
-mapa_items = {}
+BASE_DIR = Path(__file__).resolve().parents[2]
+YAML_PATH = BASE_DIR / "config" / "settings_anexo2.yaml"
+
 try:
-    if CONFIG_PATH_A2.exists():
-        with open(CONFIG_PATH_A2, "r", encoding="utf-8") as f:
-            config_a2 = yaml.safe_load(f) or {}
-            if "items_nombres" in config_a2:
-                mapa_items = config_a2["items_nombres"]
-            elif "items" in config_a2:
-                mapa_items = config_a2["items"]
-            elif "columnas" in config_a2:
-                mapa_items = config_a2["columnas"]
-    else:
-        st.warning("⚠️ No se encontró settings_anexo2.yaml. Se usarán nombres genéricos de ítems.")
+    with open(YAML_PATH, "r", encoding="utf-8") as f:
+        config_a2 = yaml.safe_load(f)
+        mapa_items = config_a2.get("items_nombres", {})
 except Exception as e:
-    st.warning(f"No se pudo leer settings_anexo2.yaml: {e}")
+    st.error(f"❌ Error al leer {YAML_PATH.name}: {e}")
+    mapa_items = {}
 
-# --- Filtros
-if "Región" not in df.columns:
-    st.error("La columna 'Región' no está disponible tras normalizar el Anexo 2.")
+# ==============================================================
+# FILTROS
+# ==============================================================
+
+col1, col2, col3 = st.columns(3)
+with col1:
+    ut_sel = st.multiselect("Unidad Territorial:", sorted(df["UNIDAD_TERRITORIAL"].dropna().unique()))
+with col2:
+    mes_sel = st.multiselect("Mes:", sorted(df["MES"].dropna().unique()))
+with col3:
+    sup_sel = st.multiselect("Supervisor:", sorted(df["SUPERVISOR"].dropna().unique()))
+
+df_filtrado = df.copy()
+if ut_sel:
+    df_filtrado = df_filtrado[df_filtrado["UNIDAD_TERRITORIAL"].isin(ut_sel)]
+if mes_sel:
+    df_filtrado = df_filtrado[df_filtrado["MES"].isin(mes_sel)]
+if sup_sel:
+    df_filtrado = df_filtrado[df_filtrado["SUPERVISOR"].isin(sup_sel)]
+
+if df_filtrado.empty:
+    st.warning("⚠️ No hay registros que coincidan con los filtros seleccionados.")
     st.stop()
 
-regiones = st.multiselect("Filtrar por Región:", sorted(df["Región"].dropna().unique()))
-if regiones:
-    df = df[df["Región"].isin(regiones)]
+# ==============================================================
+# 🔹 RESUMEN AUTOMÁTICO ASISTIDO POR IA (versión limpia y automática)
+# ==============================================================
 
-# --- Promedio por región
-if "Puntaje (%)" in df.columns:
-    prom = df.groupby("Región", dropna=True)["Puntaje (%)"].mean().reset_index()
-    fig = px.bar(
-        prom, x="Puntaje (%)", y="Región", orientation="h",
-        color="Puntaje (%)", color_continuous_scale="Blues",
-        title="Promedio de Puntaje por Región"
+from utils.llm import generate_anexo2_summary
+
+# 1) Preparamos agregados (mismo cálculo que antes)
+cols_items = [f"ITEM_{i}" for i in range(1, 21)]
+df_items = df_filtrado[cols_items].copy()
+
+valores = df_items.values.flatten()
+valores = valores[~pd.isna(valores)]
+total_validos = int(len(valores))
+total_0 = int((valores == 0).sum())
+total_1 = int((valores == 1).sum())
+total_2 = int((valores == 2).sum())
+
+pct_0 = round((total_0 / total_validos) * 100, 1) if total_validos else 0.0
+pct_1 = round((total_1 / total_validos) * 100, 1) if total_validos else 0.0
+pct_2 = round((total_2 / total_validos) * 100, 1) if total_validos else 0.0
+
+grupos = {
+    "Al CTZ": [f"ITEM_{i}" for i in range(1, 6)],
+    "Al Gestor Local": [f"ITEM_{i}" for i in range(6, 9)],
+    "Al Hogar": [f"ITEM_{i}" for i in range(9, 12)],
+    "Durante el Acompañamiento": [f"ITEM_{i}" for i in range(12, 21)]
+}
+
+def totales_por_valor(df, items, valor):
+    if not items:
+        return 0
+    subset = df[items]
+    return int((subset == valor).sum().sum())
+
+# ==============================================================
+# Ajuste semántico: nombres humanizados de categorías
+# ==============================================================
+
+nombres_humanos = {
+    "Al CTZ": "las actividades sobre CTZ",
+    "Al Gestor Local": "las actividades sobre el Gestor Local",
+    "Al Hogar": "las actividades en el Hogar",
+    "Durante el Acompañamiento": "las actividades Durante la Visita"
+}
+
+resumen_grupos = []
+for nombre, items in grupos.items():
+    resumen_grupos.append({
+        # 🔹 Nuevo nombre de campo: categoria_actividades (en vez de grupo)
+        "categoria_actividades": nombres_humanos.get(nombre, nombre),
+        "total_0": totales_por_valor(df_filtrado, items, 0),
+        "total_1": totales_por_valor(df_filtrado, items, 1),
+        "total_validos_en_categoria": int(df_filtrado[items].notna().sum().sum())
+    })
+
+def ranking_items(df, items, valor, etiqueta_map):
+    s = df[items].apply(lambda col: (col == valor).sum())
+    s = s[s > 0].sort_values(ascending=False)
+    return [
+        {"item": k, "nombre": etiqueta_map.get(k, k), "freq": int(v)}
+        for k, v in s.items()
+    ]
+
+rank_0 = ranking_items(df_filtrado, cols_items, 0, mapa_items)
+rank_1 = ranking_items(df_filtrado, cols_items, 1, mapa_items)
+
+contexto_llm = {
+    "filtros_aplicados": {
+        "unidad_territorial": ut_sel or "todas",
+        "mes": mes_sel or "todos",
+        "supervisor": sup_sel or "todos",
+    },
+    "global": {
+        "total_registros": int(len(df_filtrado)),
+        "total_respuestas_validas": total_validos,
+        "porcentajes": {"no_cumple_0": pct_0, "en_desarrollo_1": pct_1, "cumple_2": pct_2}
+    },
+    "categorias_de_actividades": resumen_grupos,
+    "ranking_no_cumple": rank_0,
+    "ranking_en_desarrollo": rank_1
+}
+
+# 2) Generar resumen automáticamente
+try:
+    with st.spinner("Generando resumen ejecutivo..."):
+        texto = generate_anexo2_summary(contexto_llm)
+        # Limpiar etiquetas tipo <s> [B_NATURAL] etc.
+        import re
+        texto_limpio = re.sub(r"<[^>]+>", "", texto)
+        texto_limpio = re.sub(r"\[[^\]]+\]", "", texto_limpio)
+        texto_limpio = texto_limpio.strip()
+
+    # Mostrar texto limpio sin título visible (solo si se desea)
+    st.markdown(
+        f"""
+        <div style="font-size:16px; line-height:1.6; color:#222; background-color:#f9fafb; padding:15px; border-radius:8px; border-left:5px solid #004C97;">
+            {texto_limpio}
+        </div>
+        """,
+        unsafe_allow_html=True
     )
-    fig.update_layout(plot_bgcolor="#FFFFFF", paper_bgcolor="#FFFFFF")
-    st.plotly_chart(fig, use_container_width=True)
-else:
-    st.info("No hay columna 'Puntaje (%)' para graficar.")
+except Exception as e:
+    st.warning("No fue posible generar el resumen automático.")
+    st.text(str(e))
+    
+# ==============================================================
+# INDICADORES EJECUTIVOS (KPI)
+# ==============================================================
 
 st.markdown("---")
-st.subheader("Ítems en Desarrollo (Valor = 1)")
+# Solo columnas de ítems
+cols_items = [f"ITEM_{i}" for i in range(1, 21)]
+df_items = df_filtrado[cols_items].copy()
 
-cols_items = [c for c in df.columns if c.upper().startswith("ITEM_")]
-if not cols_items:
-    st.warning("No se encontraron columnas de ítems (ITEM_1, ITEM_2, etc.) en la base.")
+# Aplanar y eliminar NaN
+valores = df_items.values.flatten()
+valores = valores[~pd.isna(valores)]
+
+if len(valores) == 0:
+    st.info("No hay datos válidos para calcular indicadores.")
 else:
-    # (A) Conteo total por región
-    df_items_1 = df.groupby("Región")[cols_items].apply(lambda x: (x == 1).sum().sum()).reset_index()
-    df_items_1.columns = ["Región", "Total Ítems en Desarrollo"]
-    fig1 = px.bar(
-        df_items_1, x="Total Ítems en Desarrollo", y="Región", orientation="h",
-        color="Total Ítems en Desarrollo", color_continuous_scale="Oranges",
-        title="Cantidad de Ítems en Desarrollo por Región"
-    )
-    fig1.update_layout(plot_bgcolor="#FFFFFF", paper_bgcolor="#FFFFFF")
-    st.plotly_chart(fig1, use_container_width=True)
+    total_validos = len(valores)
+    total_0 = (valores == 0).sum()
+    total_1 = (valores == 1).sum()
+    total_2 = (valores == 2).sum()
 
-    # (B) Top 10 de ítems con valor 1
-    items_counts = (df[cols_items] == 1).sum().sort_values(ascending=False).reset_index()
-    items_counts.columns = ["Ítem", "Veces en Desarrollo"]
+    pct_0 = round((total_0 / total_validos) * 100, 1)
+    pct_1 = round((total_1 / total_validos) * 100, 1)
+    pct_2 = round((total_2 / total_validos) * 100, 1)
 
-    if mapa_items:
-        items_counts["Ítem"] = items_counts["Ítem"].apply(
-            lambda s: mapa_items.get(s, mapa_items.get(s.upper(), s))
+    col1, col2, col3, col4 = st.columns(4)
+
+    with col1:
+        st.metric(
+            label="✅ % de Ítems Cumplidos",
+            value=f"{pct_2}%",
+            delta=None
+        )
+    with col2:
+        st.metric(
+            label="⚠️ % de Ítems en Desarrollo",
+            value=f"{pct_1}%",
+            delta=None
+        )
+    with col3:
+        st.metric(
+            label="❌ % de Ítems No Cumplidos",
+            value=f"{pct_0}%",
+            delta=None
+        )
+    with col4:
+        st.metric(
+            label="Total de registros analizados",
+            value=len(df_filtrado),
+            delta=None
         )
 
-    fig2 = px.bar(
-        items_counts.head(10), x="Veces en Desarrollo", y="Ítem", orientation="h",
-        color="Veces en Desarrollo", color_continuous_scale="Reds",
-        title="Ítems con mayor frecuencia de valor 1 (En desarrollo)"
-    )
-    fig2.update_layout(plot_bgcolor="#FFFFFF", paper_bgcolor="#FFFFFF")
-    st.plotly_chart(fig2, use_container_width=True)
-
 st.markdown("---")
-with st.expander("Ver datos detallados"):
-    st.dataframe(df)
+
+# ==============================================================
+# DEFINICIÓN DE GRUPOS
+# ==============================================================
+
+grupos = {
+    "Al CTZ": [f"ITEM_{i}" for i in range(1, 6)],
+    "Al Gestor Local": [f"ITEM_{i}" for i in range(6, 9)],
+    "Al Hogar": [f"ITEM_{i}" for i in range(9, 12)],
+    "Durante el Acompañamiento": [f"ITEM_{i}" for i in range(12, 21)]
+}
+
+orden_items = [f"ITEM_{i}" for i in range(1, 21)]
+
+# ==============================================================
+# PROCESAMIENTO DE PORCENTAJES
+# ==============================================================
+
+def preparar_porcentajes(df):
+    registros = []
+    for grupo, items in grupos.items():
+        for item in items:
+            if item in df.columns:
+                total = df[item].notna().sum()
+                if total == 0:
+                    continue
+                counts = df[item].value_counts().reindex([0, 1, 2], fill_value=0)
+                for valor, freq in counts.items():
+                    registros.append({
+                        "Ítem": item,
+                        "Grupo": grupo,
+                        "Descripción": mapa_items.get(item, item),
+                        "Valor": valor,
+                        "Frecuencia": freq,
+                        "Porcentaje": round((freq / total) * 100, 1)
+                    })
+    if not registros:
+        return None
+    return pd.DataFrame(registros)
+
+df_porcentajes = preparar_porcentajes(df_filtrado)
+if df_porcentajes is None:
+    st.info("No existen datos válidos para graficar.")
+    st.stop()
+
+# ==============================================================
+# TRANSFORMACIÓN FINAL Y ORDEN
+# ==============================================================
+
+pivot_df = df_porcentajes.pivot_table(
+    index=["Grupo", "Ítem", "Descripción"],
+    columns="Valor",
+    values="Porcentaje",
+    fill_value=0
+).reset_index()
+
+pivot_df.columns.name = None
+pivot_df = pivot_df.rename(columns={0: "❌ No cumple", 1: "⚠️ En desarrollo", 2: "✅ Cumple"})
+
+pivot_df["Ítem_nro"] = pivot_df["Ítem"].str.extract(r"(\d+)").astype(int)
+pivot_df = pivot_df.sort_values("Ítem_nro")
+
+# ==============================================================
+# GRAFICADO – UN SOLO GRÁFICO CON DIVISIONES VISUALES
+# ==============================================================
+
+color_map = {
+    "❌ No cumple": "#D32F2F",
+    "⚠️ En desarrollo": "#FBC02D",
+    "✅ Cumple": "#388E3C"
+}
+
+fig = go.Figure()
+
+# Añadir barras apiladas con tooltip minimalista (corregido)
+for col in ["❌ No cumple", "⚠️ En desarrollo", "✅ Cumple"]:
+    fig.add_trace(go.Bar(
+        y=pivot_df["Descripción"],
+        x=pivot_df[col],
+        name=col,
+        orientation="h",
+        marker=dict(color=color_map[col]),
+        # Tooltip minimalista y limpio
+        hovertemplate=f"<b>{col}:</b> %{{x:.1f}}%<extra></extra>"
+    ))
+    
+# Añadir líneas divisorias entre grupos
+y_positions = []
+for grupo, items in grupos.items():
+    ultimo_item = int(items[-1].split("_")[1])
+    if ultimo_item < 20:
+        desc = mapa_items.get(f"ITEM_{ultimo_item}", "")
+        try:
+            y_val = pivot_df[pivot_df["Descripción"] == desc].index[-1]
+            y_positions.append(y_val + 0.5)
+        except:
+            pass
+
+for y in y_positions:
+    fig.add_shape(
+        type="line",
+        x0=0, x1=100,
+        y0=y, y1=y,
+        line=dict(color="#B0BEC5", width=1.5, dash="dot")
+    )
+
+# Etiquetas de grupo al margen derecho
+for grupo, items in grupos.items():
+    desc_ref = mapa_items.get(items[0], "")
+    try:
+        idx_inicio = pivot_df[pivot_df["Descripción"] == desc_ref].index[0]
+        idx_fin = pivot_df[pivot_df["Ítem"] == items[-1]].index[0]
+        fig.add_annotation(
+            x=102, y=(idx_inicio + idx_fin) / 2,
+            text=f"<b>{grupo}</b>",
+            showarrow=False,
+            font=dict(size=13, color="#003A70"),
+            xanchor="left"
+        )
+    except:
+        pass
+
+# ==============================================================
+# FORMATO FINAL
+# ==============================================================
+
+fig.update_layout(
+    title="Distribución porcentual del cumplimiento de ítems evaluados",
+    barmode="stack",
+    xaxis=dict(title="Porcentaje (%)", range=[0, 100], showgrid=True, gridcolor="#ECEFF1"),
+    yaxis=dict(title="", showgrid=False, autorange="reversed"),
+    plot_bgcolor="#FFFFFF",
+    paper_bgcolor="#FFFFFF",
+    font=dict(size=12, color="#003A70"),
+    title_font=dict(size=16, color="#003A70"),
+    legend_title_text="Estado del ítem",
+    bargap=0.15,
+    bargroupgap=0.05,
+    margin=dict(t=60, b=30, l=280, r=120),
+    height=900,
+    hoverlabel=dict(
+        bgcolor="white",
+        font_size=12,
+        font_color="black",
+        bordercolor="#B0BEC5"
+    )
+)
+
+st.plotly_chart(fig, use_container_width=True)
