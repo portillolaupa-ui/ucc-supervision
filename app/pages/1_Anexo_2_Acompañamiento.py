@@ -80,6 +80,224 @@ if df_filtrado.empty:
     st.stop()
 
 # ==============================================================
+# 🔹 NUEVA SECCIÓN: TARJETAS DE ÍTEMS 'NO CUMPLE' (valor 0)
+# ==============================================================
+
+st.markdown("### 🔴 Actividades que requieren fortalecimiento")
+cols_items = [f"ITEM_{i}" for i in range(1, 21)]
+
+# Calcular frecuencia y porcentaje de 'no cumple'
+freq_0 = (df_filtrado[cols_items] == 0).sum()
+pct_0 = (freq_0 / df_filtrado[cols_items].notna().sum() * 100).round(1)
+no_cumple = pct_0[pct_0 > 0].sort_values(ascending=False)
+
+if no_cumple.empty:
+    st.info("✅ No se registran ítems con valor 'No cumple' en la selección actual.")
+else:
+    n = len(no_cumple)
+    cols_per_row = 3
+    items = list(no_cumple.index)
+
+    for i in range(0, n, cols_per_row):
+        row = st.columns(cols_per_row)
+        for j, item in enumerate(items[i:i+cols_per_row]):
+            nombre = mapa_items.get(item, item)
+            porcentaje = no_cumple[item]
+
+            # Determinar grupo según número de ítem
+            item_num = int(item.split("_")[1])
+            if 1 <= item_num <= 5:
+                grupo_texto = "Al CTZ:"
+            else:
+                grupo_texto = "Al Gestor Local:"
+
+            # Color según nivel de riesgo
+            if porcentaje >= 40:
+                color_borde = "#B71C1C"   # rojo oscuro
+            elif porcentaje >= 20:
+                color_borde = "#F57C00"   # naranja
+            else:
+                color_borde = "#FBC02D"   # amarillo
+
+            with row[j]:
+                st.markdown(
+                    f"""
+                    <div style="
+                        background-color:#FFFFFF;
+                        border-radius:14px;
+                        border-left:6px solid {color_borde};
+                        box-shadow:0 2px 8px rgba(0,0,0,0.07);
+                        padding:14px 16px;
+                        margin-bottom:10px;">
+                        <div style="font-size:13px;color:#004C97;font-weight:600;margin-bottom:4px;">
+                            {grupo_texto}
+                        </div>
+                        <div style="font-weight:600;color:#003A70;margin-bottom:6px;font-size:15px;">
+                            {nombre}
+                        </div>
+                        <div style="font-size:13px;color:{color_borde};">
+                            <b>{porcentaje}%</b> de fichas marcaron “No cumple”
+                        </div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True
+                )
+
+if df_filtrado.empty:
+    st.warning("⚠️ No hay registros que coincidan con los filtros seleccionados.")
+    st.stop()
+
+# ==============================================================
+# 📈 LÍNEAS: Avance mensual del % "No cumple" por ítem (para MES numérico)
+# ==============================================================
+
+import plotly.graph_objects as go
+
+if not no_cumple.empty:
+    # Mapeo de número de mes a nombre
+    mapa_meses = {
+        1: "Enero", 2: "Febrero", 3: "Marzo", 4: "Abril", 5: "Mayo", 6: "Junio",
+        7: "Julio", 8: "Agosto", 9: "Septiembre", 10: "Octubre", 11: "Noviembre", 12: "Diciembre"
+    }
+
+    # Asegurar que MES sea numérico
+    df_filtrado["MES"] = pd.to_numeric(df_filtrado["MES"], errors="coerce")
+    meses_disponibles = sorted(df_filtrado["MES"].dropna().unique())
+    if not meses_disponibles:
+        st.info("⚠️ No hay datos de meses numéricos para graficar.")
+    else:
+        # Convertir a nombres para eje X
+        x_vals = [mapa_meses.get(int(m), str(m)) for m in meses_disponibles]
+
+        items_con_0 = list(no_cumple.index)
+        item_top = items_con_0[0]
+
+        def nombre_item_corto(item_key: str) -> str:
+            n = int(item_key.split("_")[1])
+            return f"Item {n}"
+
+        def truncar(texto: str, maxlen: int = 42) -> str:
+            texto = (texto or "").strip()
+            return (texto[:maxlen-1] + "…") if len(texto) > maxlen else texto
+
+        fig_line = go.Figure()
+
+        for it in items_con_0:
+            serie = []
+            for mes in meses_disponibles:
+                df_mes = df_filtrado[df_filtrado["MES"] == mes]
+                total_validos = df_mes[it].notna().sum()
+                if total_validos == 0:
+                    serie.append(None)
+                else:
+                    pct0 = ((df_mes[it] == 0).sum() / total_validos) * 100
+                    serie.append(round(pct0, 1))
+
+            item_num = int(it.split("_")[1])
+            nombre_largo = mapa_items.get(it, it)
+            trace_name = nombre_item_corto(it)
+            legend_name = f"{trace_name}: {truncar(nombre_largo)}"
+
+            fig_line.add_trace(go.Scatter(
+                x=x_vals,
+                y=serie,
+                mode="lines+markers",
+                name=legend_name,
+                visible=True if it == item_top else "legendonly",
+                hovertemplate="<b>%{x}</b><br>" +
+                              trace_name + ": %{y:.1f}%<br>" +
+                              f"<span style='color:#666;'>{nombre_largo}</span><extra></extra>"
+            ))
+
+        fig_line.update_layout(
+            title="Evolución mensual del % de 'No cumple' por ítem (mostrar/ocultar desde la leyenda)",
+            xaxis=dict(title="Mes", showgrid=True, gridcolor="#ECEFF1"),
+            yaxis=dict(title="% 'No cumple'", range=[0, 100], showgrid=True, gridcolor="#ECEFF1"),
+            plot_bgcolor="#FFFFFF",
+            paper_bgcolor="#FFFFFF",
+            font=dict(size=12, color="#003A70"),
+            title_font=dict(size=16, color="#003A70"),
+            legend_title_text="Ítems (nombre truncado)",
+            margin=dict(t=60, b=40, l=70, r=40),
+            height=480
+        )
+
+        st.plotly_chart(fig_line, use_container_width=True)
+
+# ==============================================================
+# 📊 PARETO: Ítems con "No cumple" (conteo y % acumulado)
+# ==============================================================
+
+from plotly.subplots import make_subplots
+
+if not no_cumple.empty:
+    # Conteo total de 0 por ítem (en la selección actual)
+    conteos_0 = (df_filtrado[cols_items] == 0).sum()
+    df_p = conteos_0[conteos_0 > 0].rename("conteo").to_frame().reset_index()
+    df_p["item_num"] = df_p["index"].str.extract(r"(\d+)").astype(int)
+    df_p["item_etiqueta"] = df_p["item_num"].apply(lambda n: f"Item {n}")
+    df_p["nombre_largo"] = df_p["index"].apply(lambda k: mapa_items.get(k, k))
+
+    # Orden descendente por conteo
+    df_p = df_p.sort_values(by="conteo", ascending=False).reset_index(drop=True)
+    total_0 = df_p["conteo"].sum()
+    df_p["pct"] = (df_p["conteo"] / total_0 * 100).round(1)
+    df_p["pct_acum"] = (df_p["pct"].cumsum()).round(1)
+
+    # Truncado para la leyenda/hover
+    def truncar(texto: str, maxlen: int = 42) -> str:
+        texto = (texto or "").strip()
+        return (texto[:maxlen-1] + "…") if len(texto) > maxlen else texto
+
+    # Eje X como "Item N"
+    x_vals = df_p["item_etiqueta"].tolist()
+
+    # Subplot con eje secundario: barras (conteo) + línea (% acumulado)
+    fig_pareto = make_subplots(specs=[[{"secondary_y": True}]])
+    # Barras
+    fig_pareto.add_trace(
+        go.Bar(
+            x=x_vals,
+            y=df_p["conteo"],
+            name="Conteo de 'No cumple'",
+            marker=dict(color="#D32F2F"),
+            hovertext=[truncar(n) for n in df_p["nombre_largo"]],
+            hovertemplate="<b>%{x}</b><br>Conteo: %{y}<br><span style='color:#666;'>%{hovertext}</span><extra></extra>"
+        ),
+        secondary_y=False
+    )
+    # Línea % acumulado
+    fig_pareto.add_trace(
+        go.Scatter(
+            x=x_vals,
+            y=df_p["pct_acum"],
+            name="% acumulado",
+            mode="lines+markers",
+            marker=dict(size=7),
+            hovertemplate="<b>%{x}</b><br>% acumulado: %{y:.1f}%<extra></extra>"
+        ),
+        secondary_y=True
+    )
+
+    fig_pareto.update_yaxes(title_text="Conteo", secondary_y=False)
+    fig_pareto.update_yaxes(title_text="% acumulado", range=[0, 100], secondary_y=True)
+
+    fig_pareto.update_layout(
+        title="Pareto de ítems con 'No cumple' (solo ítems con al menos un 0)",
+        xaxis=dict(title="", showgrid=False),
+        plot_bgcolor="#FFFFFF",
+        paper_bgcolor="#FFFFFF",
+        font=dict(size=12, color="#003A70"),
+        title_font=dict(size=16, color="#003A70"),
+        legend_title_text="",
+        margin=dict(t=60, b=40, l=70, r=40),
+        height=480,
+        bargap=0.25
+    )
+
+    st.plotly_chart(fig_pareto, use_container_width=True)
+
+# ==============================================================
 # 🔹 RESUMEN AUTOMÁTICO ASISTIDO POR IA (versión limpia y automática)
 # ==============================================================
 
