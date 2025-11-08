@@ -34,7 +34,7 @@ items_nombres:
   ITEM_5: "Realizó seguimiento y medidas correctivas ante hallazgos de la última supervisión."
   ITEM_6: "Cuenta con programación de hogares priorizados para acompañamiento en excel, foto o pdf."
   ITEM_7: "Realiza la gestión de alertas en el módulo y deriva las alertas con más de 15 días."
-  ITEM_8: "Registra en el aplicativo de articulación la actividad desarrollada dentro de las 24 horas."
+  ITEM_8: "Item 8. Registra en el aplicativo de articulación la actividad desarrollada dentro de las 24 horas."
   ITEM_9: "El hogar manifiesta que se le visitó en el último mes."
   ITEM_10: "El hogar recuerda el tema tratado en la última visita."
   ITEM_11: "El hogar asumió un compromiso en la última visita verificable en cartilla."
@@ -47,3 +47,30 @@ items_nombres:
   ITEM_18: "En la VD, Usa materiales educativos (rotafolio) durante la visita."
   ITEM_19: "En la VD, verifica la comprensión del tema mediante preguntas."
   ITEM_20: "Al finalizar la VD, promueve compromisos y usa la cartilla correspondiente."
+
+# Definición dinámica de grupos
+grupos_items:
+  CTZ:
+    - ITEM_1
+    - ITEM_2
+    - ITEM_3
+    - ITEM_4
+    - ITEM_5
+  Gestor Local:
+    - ITEM_6
+    - ITEM_7
+    - ITEM_8
+  #Al Hogar:
+    - ITEM_9
+    - ITEM_10
+    - ITEM_11
+  #Durante el Acompañamiento:
+    - ITEM_12
+    - ITEM_13
+    - ITEM_14
+    - ITEM_15
+    - ITEM_16
+    - ITEM_17
+    - ITEM_18
+    - ITEM_19
+    - ITEM_20

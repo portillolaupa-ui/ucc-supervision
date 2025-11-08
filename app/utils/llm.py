@@ -31,38 +31,42 @@ def _get_model():
     return st.secrets.get("openai_model", "gpt-4o-mini")
 
 # ==============================================================
-# 🧩 FUNCIÓN 1 – RESUMEN ANEXO 2
+# 🧩 FUNCIÓN 1 – SÍNTESIS OPERATIVA (Anexo 2 optimizada para dashboard)
 # ==============================================================
 
 def generate_anexo2_summary(
     contexto: Dict[str, Any],
     *,
     model: str | None = None,
-    max_tokens: int = 350
+    max_tokens: int = 200
 ) -> str:
-    """Genera un resumen ejecutivo del Anexo 2 a partir de datos agregados."""
+    """
+    Genera una síntesis operativa breve (3 líneas) para la toma de decisiones
+    sobre el Anexo 2, orientada a Especialistas de Acompañamiento Familiar y Unidades Territoriales (UT).
+    """
+
     client = _get_client()
     modelo = model or _get_model()
     contenido_json = json.dumps(contexto, ensure_ascii=False)
 
     system_msg = (
-        "Eres un analista institucional del MIDIS. "
-        "Redacta en tono técnico, sobrio y objetivo. "
-        "No uses emojis. Sé claro y breve (6–10 líneas). "
-        "Menciona patrones, brechas y acciones sugeridas. "
-        "Usa expresiones como 'las actividades sobre CTZ', 'las actividades sobre el Gestor Local', "
-        "'las actividades en el Hogar' o 'las actividades Durante la Visita'. Evita 'grupo'."
+        "Eres un analista operativo del Programa JUNTOS del MIDIS especializado en supervisión territorial. "
+        "Los Especialistas de Acompañamiento Familiar han recogido esta información en sus supervisiones en campo a cada UT"
+        "La evaluación se centra en las actividades de cumplimiento de los Getsores Locales y Coordinadores Técnico Zonales (CTZ) de cada UT supervisada"
+        "Tu función es redactar una síntesis de tres líneas que oriente la toma de decisiones "
+        "de los Especialistas de Acompañamiento Familiar del Programa Juntos. "
+        "Nada de párrafos largos, ni porcentajes, ni introducciones. "
+        "Solo tres líneas claras, técnicas y operativas, sin emojis ni listas. "
+        "Usa este formato:\n"
+        "Acción inmediata sugerida (qué hacer, cuándo hacerlo, cómo hacerlo y quién debe hacerlo)."
     )
 
     user_msg = (
-        "Elabora un resumen ejecutivo del monitoreo del Anexo 2 (Acompañamiento al Hogar) "
-        "usando la información agregada en este JSON:\n"
+        f"A partir del siguiente JSON, redacta la síntesis de tres líneas:\n"
         f"{contenido_json}\n\n"
-        "Incluye:\n"
-        "- Tendencia general (cumple, desarrollo, no cumple)\n"
-        "- Principales hallazgos y acciones en desarrollo\n"
-        "- 2–3 líneas de interpretación y foco de mejora.\n"
-        "- No inventes cifras."
+        "Evita repetir porcentajes, cifras o tendencias ya visibles en el dashboard. "
+        "Cita actores como 'CTZ', 'Gestor Local' según el contexto. "
+        "En la última línea, formula una acción concreta"
     )
 
     resp = client.chat.completions.create(
@@ -72,8 +76,9 @@ def generate_anexo2_summary(
             {"role": "user", "content": user_msg},
         ],
         max_tokens=max_tokens,
-        temperature=0.2,
+        temperature=0.25,
     )
+
     return resp.choices[0].message.content.strip()
 
 # ==============================================================
