@@ -340,9 +340,9 @@ try:
             unsafe_allow_html=True
         )
 
-except Exception as e:
-    st.warning("No fue posible generar el resumen automático.")
-    st.text(str(e))
+except Exception:
+    st.warning("💬 ⚠️ No se pudo generar la interpretación automática")
+
 
 st.markdown("<br><hr style='border:0.5px solid #ddd;margin:25px 0;'>", unsafe_allow_html=True)
 
