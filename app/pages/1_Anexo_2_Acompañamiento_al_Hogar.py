@@ -245,7 +245,7 @@ else:
 
     tarjetas_html += "</div>"
 
-components.html(tarjetas_html, height=210, scrolling=False)
+components.html(tarjetas_html, height=None, scrolling=True)
 
 # ==============================================================
 # 🧩 CONTEXTO PARA EL RESUMEN AUTOMÁTICO ASISTIDO POR IA
