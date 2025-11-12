@@ -28,7 +28,7 @@ aplicar_estilos()
 # CABECERA
 # ==============================================================
 
-st.title("Monitoreo del Acompañamiento al Hogar con Gestión Territorial")
+st.title("Acompañamiento al Hogar con Gestión Territorial")
 st.markdown("<br>", unsafe_allow_html=True)
 
 # ==============================================================
