@@ -8,7 +8,6 @@ import plotly.express as px
 from pathlib import Path
 from utils.style import aplicar_estilos
 import datetime
-st.caption(f"Última actualización: {datetime.date.today():%d/%m/%Y}")
 
 
 # ==============================================================
@@ -24,7 +23,11 @@ st.set_page_config(
     layout="wide"
 )
 
+st.caption(f"Última actualización: {datetime.date.today():%d/%m/%Y}")
+
+
 aplicar_estilos()
+
 
 # ==============================================================
 # 🧩 CLASIFICADOR POR ANEXO
