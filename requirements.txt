@@ -135,7 +135,7 @@ openpyxl==3.1.5
 # ==============================
 # Inteligencia Artificial (resúmenes y análisis)
 # ==============================
-openai==1.42.0
+openai>=1.42.0
 
 # ==============================
 # Utilitarios opcionales (según tus extensiones)
