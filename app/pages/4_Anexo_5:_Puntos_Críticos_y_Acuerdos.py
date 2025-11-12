@@ -14,7 +14,7 @@ from datetime import datetime, timedelta
 
 from utils.loaders import cargar_datos
 from utils.style import aplicar_estilos
-from utils.llm import generate_section_insight
+from utils.llm import generate_anexo5_summary
 
 # --------------------------------------------------------------
 # CONFIGURACIÓN GENERAL
@@ -178,254 +178,98 @@ def cards_por_supervisor(df_in: pd.DataFrame):
 cards_por_supervisor(df_f)
 st.markdown("---")
 
-# --------------------------------------------------------------
-# IA – ANÁLISIS E INTERPRETACIÓN (sin hallazgos)
-# --------------------------------------------------------------
-# Construimos contexto con agregados de gestión (no PII, no texto crudo)
-def contexto_acuerdos(df_in: pd.DataFrame) -> dict:
-    conteo_estado = df_in["ESTADO"].value_counts().to_dict()
-    # Top supervisores por % vencidos
-    base = df_in.copy()
-    tot = base.groupby("SUPERVISOR").size().rename("total")
-    ven = base[(base["ESTADO"] == "Vencido")].groupby("SUPERVISOR").size().rename("vencidos")
-    kpi = pd.concat([tot, ven], axis=1).fillna(0)
-    kpi["pct_vencidos"] = np.where(kpi["total"] > 0, (kpi["vencidos"] / kpi["total"] * 100).round(1), 0.0)
-    top_sup = kpi.sort_values("pct_vencidos", ascending=False).head(5).reset_index()
-    top_sup_list = [{"supervisor": r["SUPERVISOR"], "pct_vencidos": float(r["pct_vencidos"]), "total": int(r["total"])} for _, r in top_sup.iterrows()]
+# ==============================================================
+# 💬 ANÁLISIS AUTOMÁTICO ASISTIDO POR IA
+# ==============================================================
 
-    # Top UT por vencidos
-    ut_v = base[base["ESTADO"] == "Vencido"].groupby("UNIDAD_TERRITORIAL").size().sort_values(ascending=False).head(5)
-    top_ut_list = [{"ut": k, "vencidos": int(v)} for k, v in ut_v.items()]
+contexto_llm = {
+    "unidad_territorial": ut_sel or "todas",
+    "mes": mes_sel or "todos",
+    "supervisor": sup_sel or "todos",
+    "acuerdos": df_f["ACUERDOS_MEJORA"].dropna().tolist(),
+    "puntos_criticos": df_f["PUNTOS_CRITICOS"].dropna().tolist(),
+    "responsables": df_f["RESPONSABLE"].dropna().tolist(),
 
-    # Próximos 15 días
-    prox = base[(~base["FECHA_LÍMITE"].isna()) & (base["DIAS_RESTANTES"] >= 0) & (base["DIAS_RESTANTES"] <= 15)]
-    proximos_15 = int(len(prox))
-
-    return {
-        "anexo": "Anexo 5 – Seguimiento de Acuerdos",
-        "seccion": "Análisis e interpretación",
-        "modo": "analisis",
-        "sla": conteo_estado,
-        "top_supervisores_riesgo": top_sup_list,
-        "top_ut_vencidos": top_ut_list,
-        "proximos_15_dias": proximos_15
-    }
+}
 
 try:
-    ctx_analisis = contexto_acuerdos(df_f)
-    with st.spinner("Generando análisis e interpretación..."):
-        texto_analisis = generate_section_insight(ctx_analisis)
-    # Limpieza mínima
-    import re
-    texto_analisis = re.sub(r"<[^>]+>", "", texto_analisis)
-    texto_analisis = re.sub(r"\[[^\]]+\]", "", texto_analisis).strip()
-
-    st.subheader("Análisis e interpretación")
-    st.markdown(
-        f"""
-        <div style="font-size:16px; line-height:1.6; color:#222; background-color:#f9fafb;
-                    padding:15px; border-radius:8px; border-left:5px solid #004C97;">
-            {texto_analisis}
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
+    with st.spinner("Analizando acuerdos y puntos críticos..."):
+        texto = generate_anexo5_summary(contexto_llm)
+        import re
+        texto_limpio = re.sub(r"<[^>]+>", "", texto)
+        st.markdown(
+            f"""
+            <div style="margin-top:10px; font-size:15.5px; line-height:1.7; color:#333333;
+            font-family:'Source Sans Pro',sans-serif;">{texto_limpio}</div>
+            """,
+            unsafe_allow_html=True
+        )
 except Exception as e:
     st.warning("No fue posible generar el análisis automático.")
     st.text(str(e))
 
-# --------------------------------------------------------------
-# IA – RECOMENDACIONES (corto y mediano plazo)
-# --------------------------------------------------------------
-def contexto_recomendaciones(df_in: pd.DataFrame) -> dict:
-    # Reutilizamos algunos agregados para orientar recomendaciones
-    conteo_estado = df_in["ESTADO"].value_counts().to_dict()
-    return {
-        "anexo": "Anexo 5 – Seguimiento de Acuerdos",
-        "seccion": "Recomendaciones",
-        "modo": "recomendaciones",
-        "sla": conteo_estado
-    }
-
-try:
-    ctx_reco = contexto_recomendaciones(df_f)
-    with st.spinner("Generando recomendaciones..."):
-        texto_reco = generate_section_insight(ctx_reco)
-    import re
-    texto_reco = re.sub(r"<[^>]+>", "", texto_reco)
-    texto_reco = re.sub(r"\[[^\]]+\]", "", texto_reco).strip()
-
-    st.subheader("Recomendaciones a corto y mediano plazo")
-    st.markdown(
-        f"""
-        <div style="font-size:16px; line-height:1.6; color:#222; background-color:#f9fafb;
-                    padding:15px; border-radius:8px; border-left:5px solid #007ACC;">
-            {texto_reco}
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
-except Exception as e:
-    st.warning("No fue posible generar las recomendaciones automáticas.")
-    st.text(str(e))
-
-st.markdown("---")
+st.markdown("<br><hr style='border:0.5px solid #ddd;margin:25px 0;'>", unsafe_allow_html=True)
 
 # --------------------------------------------------------------
-# VISUALIZACIÓN 1: HEATMAP UT × ESTADO
-# --------------------------------------------------------------
-st.subheader("Mapa de calor: Unidad Territorial × Estado")
-heat_df = df_f.pivot_table(index="UNIDAD_TERRITORIAL", columns="ESTADO", values="AÑO", aggfunc="count", fill_value=0)
-
-# Asegurar el orden de columnas de estado
-estado_cols = ["Vencido", "Por vencer", "En curso", "Con holgura", "Cumplido", "Sin fecha"]
-for c in estado_cols:
-    if c not in heat_df.columns:
-        heat_df[c] = 0
-heat_df = heat_df[estado_cols]
-
-fig_heat = go.Figure(data=go.Heatmap(
-    z=heat_df.values,
-    x=heat_df.columns.tolist(),
-    y=heat_df.index.tolist(),
-    colorscale="YlOrRd",
-    colorbar=dict(title="N° acuerdos")
-))
-fig_heat.update_layout(
-    xaxis_title="Estado",
-    yaxis_title="Unidad Territorial",
-    plot_bgcolor="#FFFFFF",
-    paper_bgcolor="#FFFFFF",
-    margin=dict(t=40, b=40, l=80, r=40),
-    height=480
-)
-st.plotly_chart(fig_heat, use_container_width=True)
-
-st.markdown("---")
-
-# --------------------------------------------------------------
-# VISUALIZACIÓN 2: TIMELINE (GANTT) – PRÓXIMOS 15 DÍAS
-# --------------------------------------------------------------
-st.subheader("Timeline: acuerdos con plazo en los próximos 15 días")
-df_gantt = df_f[(~df_f["FECHA_LÍMITE"].isna()) & (df_f["DIAS_RESTANTES"] >= 0) & (df_f["DIAS_RESTANTES"] <= 15)].copy()
-
-if df_gantt.empty:
-    st.info("No hay acuerdos con vencimiento en los próximos 15 días.")
-else:
-    gantt = df_gantt.copy()
-    gantt["Inicio"] = hoy
-    gantt["Fin"] = gantt["FECHA_LÍMITE"]
-    # Etiqueta lateral (puedes alternar por RESPONSABLE)
-    gantt["Recurso"] = gantt["SUPERVISOR"]
-
-    color_map = {
-        "Vencido": "#C62828",
-        "Por vencer": "#F57C00",
-        "En curso": "#FBC02D",
-        "Con holgura": "#388E3C",
-        "Cumplido": "#2E7D32",
-        "Sin fecha": "#9E9E9E"
-    }
-
-    fig_gantt = px.timeline(
-        gantt,
-        x_start="Inicio", x_end="Fin",
-        y="Recurso",
-        color="ESTADO",
-        hover_data=["UNIDAD_TERRITORIAL", "DISTRITO", "ACUERDOS_MEJORA", "RESPONSABLE", "FECHA_LÍMITE"],
-        color_discrete_map=color_map
-    )
-    fig_gantt.update_yaxes(autorange="reversed")
-    fig_gantt.update_layout(
-        plot_bgcolor="#FFFFFF",
-        paper_bgcolor="#FFFFFF",
-        margin=dict(t=40, b=40, l=80, r=40),
-        height=520
-    )
-    st.plotly_chart(fig_gantt, use_container_width=True)
-
-st.markdown("---")
-
-# --------------------------------------------------------------
-# TABLA OPERATIVA – EDITABLE
+# TABLA OPERATIVA – CUMPLIMIENTO CON CHECK Y COLOR DE VENCIDOS
 # --------------------------------------------------------------
 st.subheader("Tabla operativa de acuerdos")
 
-# Vista reducida con columnas solicitadas
 vista_cols = [
-    "UNIDAD_TERRITORIAL", "DISTRITO", "SUPERVISOR", "ACUERDOS_MEJORA",
-    "RESPONSABLE", "FECHA_LÍMITE", "MEDIO_VERIFICACION", "ESTADO", "CUMPLIMIENTO"
+    "UNIDAD_TERRITORIAL", "DISTRITO", "SUPERVISOR",
+    "ACUERDOS_MEJORA", "RESPONSABLE", "FECHA_LÍMITE", "ESTADO"
 ]
-tabla = df_f[vista_cols].copy()
 
-# Editor (permite editar Medio de verificación); Estado y Cumplimiento solo lectura
-# Nota: st.data_editor requiere Streamlit >= 1.22 para column_config
-editable_cols = {"MEDIO_VERIFICACION": True}
-column_config = {
-    "UNIDAD_TERRITORIAL": st.column_config.TextColumn("UT", disabled=True),
-    "DISTRITO": st.column_config.TextColumn("Distrito", disabled=True),
-    "SUPERVISOR": st.column_config.TextColumn("Supervisor", disabled=True),
-    "ACUERDOS_MEJORA": st.column_config.TextColumn("Acuerdo", disabled=True),
-    "RESPONSABLE": st.column_config.TextColumn("Responsable", disabled=True),
-    "FECHA_LÍMITE": st.column_config.DatetimeColumn("Fecha límite", disabled=True),
-    "MEDIO_VERIFICACION": st.column_config.TextColumn("Medio de verificación (URL o nota)"),
-    "ESTADO": st.column_config.TextColumn("Estado", disabled=True),
-    "CUMPLIMIENTO": st.column_config.TextColumn("Cumplimiento", disabled=True),
-}
+df_tabla = df_f[vista_cols].copy()
+df_tabla["FECHA_LÍMITE"] = pd.to_datetime(df_tabla["FECHA_LÍMITE"], errors="coerce").dt.date
 
-# Persistencia temporal en sesión
-session_key = "a5_tabla_edit"
-if session_key not in st.session_state:
-    st.session_state[session_key] = tabla.copy()
+# Agregar columna editable tipo check para cumplimiento
+if "cumplidos" not in st.session_state:
+    st.session_state.cumplidos = {
+        i: (df_f.loc[i, "ESTADO"] == "Cumplido")
+        for i in df_tabla.index
+    }
 
-edited = st.data_editor(
-    st.session_state[session_key],
-    column_config=column_config,
+tabla_editable = df_tabla.copy()
+tabla_editable["Cumplido"] = [
+    st.session_state.cumplidos.get(i, False) for i in df_tabla.index
+]
+
+# Editor interactivo con checkbox
+tabla_editable = st.data_editor(
+    tabla_editable,
+    column_config={
+        "UNIDAD_TERRITORIAL": st.column_config.TextColumn("UT", disabled=True),
+        "DISTRITO": st.column_config.TextColumn("Distrito", disabled=True),
+        "SUPERVISOR": st.column_config.TextColumn("Supervisor", disabled=True),
+        "ACUERDOS_MEJORA": st.column_config.TextColumn("Acuerdo", disabled=True),
+        "RESPONSABLE": st.column_config.TextColumn("Responsable", disabled=True),
+        "FECHA_LÍMITE": st.column_config.DateColumn("Fecha límite", disabled=True),
+        "ESTADO": st.column_config.TextColumn("Estado", disabled=True),
+        "Cumplido": st.column_config.CheckboxColumn("Cumplido"),
+    },
+    use_container_width=True,
     num_rows="fixed",
-    use_container_width=True
+    hide_index=True,
+    key="tabla_acuerdos"
 )
 
-# Si cambió algo, recalculamos Cumplimiento y Estado para toda la vista filtrada
-if not edited.equals(st.session_state[session_key]):
-    tmp = edited.copy()
-    # Reglas: si hay medio -> Cumplido
-    tmp["CUMPLIMIENTO"] = np.where(tmp["MEDIO_VERIFICACION"].astype(str).str.strip() != "", "✅ Cumplido", tmp["CUMPLIMIENTO"])
+# Sincronizar estado de cumplimiento
+for i, row in tabla_editable.iterrows():
+    if row["Cumplido"]:
+        df_tabla.loc[i, "ESTADO"] = "Cumplido"
+        st.session_state.cumplidos[i] = True
+    else:
+        st.session_state.cumplidos[i] = False
 
-    # Volcar cambios a df_f y df original (sobre los índices coincidentes)
-    # Emparejamos por varias columnas clave para identificar registros únicos
-    merge_keys = ["UNIDAD_TERRITORIAL","DISTRITO","SUPERVISOR","ACUERDOS_MEJORA","RESPONSABLE","FECHA_LÍMITE"]
-    df_f = df_f.drop(columns=["MEDIO_VERIFICACION","CUMPLIMIENTO","ESTADO"], errors="ignore")
-    df_f = df_f.merge(
-        tmp[merge_keys + ["MEDIO_VERIFICACION","CUMPLIMIENTO"]],
-        on=merge_keys, how="left"
-    )
+# Guardar versión actual para descarga
+df_tabla["Cumplido"] = [
+    "✅ Cumplido" if st.session_state.cumplidos.get(i, False) else "" for i in df_tabla.index
+]
 
-    # Recalcular estado en df_f (sólo vista filtrada)
-    def _estado_row(r):
-        if str(r.get("CUMPLIMIENTO","")).strip() == "✅ Cumplido":
-            return "Cumplido"
-        if pd.isna(r.get("DIAS_RESTANTES")):
-            return "Sin fecha"
-        d = r["DIAS_RESTANTES"]
-        if d < 0: return "Vencido"
-        if 0 <= d <= 3: return "Por vencer"
-        if 4 <= d <= 10: return "En curso"
-        if d > 10: return "Con holgura"
-        return "Sin fecha"
-
-    df_f["ESTADO"] = df_f.apply(_estado_row, axis=1)
-
-    # Propagar a la sesión del editor
-    # Reconstruir tabla visible a partir de df_f
-    tabla = df_f[vista_cols].copy()
-    st.session_state[session_key] = tabla.copy()
-    # Forzar refresco visual de KPIs/Gráficos (sencillo: re-ejecuta la app en el siguiente run)
-    st.toast("Actualizado: KPIs y gráficos se recalcularán con los cambios.", icon="✅")
-
-# Botón de descarga de la vista actual
 st.download_button(
-    label="Descargar vista (CSV)",
-    data=st.session_state[session_key].to_csv(index=False).encode("utf-8"),
-    file_name="acuerdos_vista_filtrada.csv",
+    label="⬇️ Descargar vista actual (CSV)",
+    data=df_tabla.to_csv(index=False).encode("utf-8"),
+    file_name="anexo5_seguimiento.csv",
     mime="text/csv"
 )

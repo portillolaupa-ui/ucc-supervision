@@ -1,210 +1,206 @@
 # ==============================================================
-# INTERVENCIONES COMPLEMENTARIAS – ANEXO 4
-# MIDIS | UCC 2025 – Versión armonizada (A2/A3)
+# MONITOREO – ANEXO 4: ACOMPAÑAMIENTO A JÓVENES (versión optimizada)
 # ==============================================================
 
 import streamlit as st
 import pandas as pd
-import plotly.graph_objects as go
+import plotly.express as px
 from pathlib import Path
-import yaml
-
 from utils.loaders import cargar_datos
 from utils.style import aplicar_estilos
-from utils.llm import generate_section_insight  # IA centrada en interpretación + recomendaciones
+from utils.llm import generate_anexo4_summary
+import logging
 
-# --------------------------------------------------------------
-# CONFIG
-# --------------------------------------------------------------
-st.set_page_config(
-    page_title="Anexo 4 – Intervenciones Complementarias",
-    page_icon="🏷️",
-    layout="wide"
-)
+# ==============================================================
+# CONFIGURACIÓN DE PÁGINA
+# ==============================================================
+
+st.set_page_config(page_title="Anexo 4 – Acompañamiento a Jóvenes", page_icon="🧭", layout="wide")
 aplicar_estilos()
 
 st.title("Intervenciones Complementarias")
 st.markdown("<br>", unsafe_allow_html=True)
 
-# --------------------------------------------------------------
+# ==============================================================
 # CARGA DE DATOS
-# --------------------------------------------------------------
-data = cargar_datos()
-df = data.get("a4")
-if df is None:
-    st.warning("⚠️ No se encontró el archivo `anexo4_consolidado.xlsx` en `/data/processed/`.")
-    st.stop()
+# ==============================================================
 
-# --------------------------------------------------------------
-# YAML – nombres de ítems
-# --------------------------------------------------------------
-BASE_DIR = Path(__file__).resolve().parents[2]
-YAML_PATH = BASE_DIR / "config" / "settings_anexo4.yaml"
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
-try:
-    with open(YAML_PATH, "r", encoding="utf-8") as f:
-        config_a4 = yaml.safe_load(f)
-        mapa_items = config_a4.get("items_nombres", {})
-except Exception as e:
-    st.error(f"❌ Error al leer {YAML_PATH.name}: {e}")
-    mapa_items = {}
-
-# --------------------------------------------------------------
-# FILTROS
-# --------------------------------------------------------------
-col1, col2, col3 = st.columns(3)
-with col1:
-    ut_sel = st.multiselect("Unidad Territorial:", sorted(df["UNIDAD_TERRITORIAL"].dropna().unique()))
-with col2:
-    mes_sel = st.multiselect("Mes:", sorted(df["MES"].dropna().unique()))
-with col3:
-    sup_sel = st.multiselect("Supervisor:", sorted(df["SUPERVISOR"].dropna().unique()))
-
-df_filtrado = df.copy()
-if ut_sel:
-    df_filtrado = df_filtrado[df_filtrado["UNIDAD_TERRITORIAL"].isin(ut_sel)]
-if mes_sel:
-    df_filtrado = df_filtrado[df_filtrado["MES"].isin(mes_sel)]
-if sup_sel:
-    df_filtrado = df_filtrado[df_filtrado["SUPERVISOR"].isin(sup_sel)]
-
-if df_filtrado.empty:
-    st.warning("⚠️ No hay registros que coincidan con los filtros seleccionados.")
-    st.stop()
-
-# --------------------------------------------------------------
-# BLOQUES Y RANGOS
-# --------------------------------------------------------------
-bloques = {
-    "Proyecto Vida Adolescente": [f"ITEM_{i}" for i in range(1, 13)],   # 1–12
-    "Independencia Económica":   [f"ITEM_{i}" for i in range(13, 19)],  # 13–18
-}
-
-# --------------------------------------------------------------
-# KPI GLOBAL (brechas por bloque) – igual a A3
-# --------------------------------------------------------------
-def porcentaje_valor(df_in, items, valor):
-    subset = df_in[items]
-    tot = subset.notna().sum().sum()
-    if tot == 0:
-        return 0.0
-    return round(((subset == valor).sum().sum() / tot) * 100, 1)
-
-colA, colB = st.columns(2)
-with colA:
-    st.metric("❌ % No Cumple – Proyecto Vida Adolescente",
-              f"{porcentaje_valor(df_filtrado, bloques['Proyecto Vida Adolescente'], 0)}%")
-with colB:
-    st.metric("❌ % No Cumple – Independencia Económica",
-              f"{porcentaje_valor(df_filtrado, bloques['Independencia Económica'], 0)}%")
-
-st.markdown("---")
-
-# --------------------------------------------------------------
-# Helpers de ranking y gráfico
-# --------------------------------------------------------------
-def ranking_items_subset(df_in, items, valor, etiqueta_map):
-    s = df_in[items].apply(lambda col: (col == valor).sum())
-    s = s[s > 0].sort_values(ascending=False)
-    return [{"item": k, "nombre": etiqueta_map.get(k, k), "freq": int(v)} for k, v in s.items()]
-
-def grafico_apilado(df_in, items, titulo, etiqueta_map):
-    registros = []
-    for item in items:
-        if item in df_in.columns:
-            total = df_in[item].notna().sum()
-            if total == 0:
-                continue
-            counts = df_in[item].value_counts().reindex([0, 1, 2], fill_value=0)
-            for v, freq in counts.items():
-                registros.append({
-                    "Ítem": item,
-                    "Descripción": etiqueta_map.get(item, item),
-                    "Valor": v,
-                    "Porcentaje": round((freq / total) * 100, 1)
-                })
-    if not registros:
+@st.cache_data(show_spinner=False)
+def cargar_y_preparar_datos():
+    try:
+        data = cargar_datos()
+        df = data.get("a4")
+        if df is None or df.empty:
+            st.warning("No se encontró el archivo `anexo4_consolidado.xlsx` en `/data/processed/`.")
+            return None
+        return df
+    except Exception as e:
+        st.error(f"❌ Error al cargar datos: {e}")
         return None
 
-    df_p = pd.DataFrame(registros).pivot_table(
-        index=["Ítem", "Descripción"], columns="Valor", values="Porcentaje", fill_value=0
-    ).reset_index()
-    df_p.columns.name = None
-    df_p = df_p.rename(columns={0: "❌ No cumple", 1: "⚠️ En desarrollo", 2: "✅ Cumple"})
-    df_p["Ítem_nro"] = df_p["Ítem"].str.extract(r"(\d+)").astype(int)
-    df_p = df_p.sort_values("Ítem_nro")
+df = cargar_y_preparar_datos()
+if df is None:
+    st.stop()
 
-    color_map = {"❌ No cumple": "#D32F2F", "⚠️ En desarrollo": "#FBC02D", "✅ Cumple": "#388E3C"}
+# ==============================================================
+# FILTROS
+# ==============================================================
 
-    fig = go.Figure()
-    for col in ["❌ No cumple", "⚠️ En desarrollo", "✅ Cumple"]:
-        fig.add_trace(go.Bar(
-            y=df_p["Descripción"], x=df_p[col],
-            name=col, orientation="h", marker=dict(color=color_map[col]),
-            hovertemplate=f"<b>{col}:</b> %{{x:.1f}}%<extra></extra>"
-        ))
-    fig.update_layout(
-        title=titulo, barmode="stack",
-        xaxis=dict(title="Porcentaje (%)", range=[0, 100], showgrid=True, gridcolor="#ECEFF1"),
-        yaxis=dict(title="", showgrid=False, autorange="reversed"),
-        plot_bgcolor="#FFFFFF", paper_bgcolor="#FFFFFF",
-        font=dict(size=12, color="#003A70"), title_font=dict(size=16, color="#003A70"),
-        legend_title_text="Estado del ítem",
-        bargap=0.15, margin=dict(t=60, b=30, l=260, r=80), height=520
-    )
-    return fig
+if "filters" not in st.session_state:
+    st.session_state.filters = {"ut": [], "mes": [], "sup": []}
 
-def resumen_ia(df_in, items, etiqueta, etiqueta_map):
-    # Contexto para IA: SIN hallazgos, solo interpretación + recomendaciones
-    top0 = ranking_items_subset(df_in, items, 0, etiqueta_map)
-    top1 = ranking_items_subset(df_in, items, 1, etiqueta_map)
-    contexto = {
-        "anexo": "Anexo 4 – Intervenciones Complementarias",
-        "seccion": etiqueta,
-        "porcentajes": {  # por si en el futuro requieres usarlo en el prompt
-            "no_cumple": porcentaje_valor(df_in, items, 0),
-            "en_desarrollo": porcentaje_valor(df_in, items, 1),
-            "cumple": porcentaje_valor(df_in, items, 2),
-        },
-        "top_no_cumple": top0,
-        "top_en_desarrollo": top1
+col1, col2, col3 = st.columns(3)
+with col1:
+    ut_sel = st.multiselect("Unidad Territorial:", sorted(df["UNIDAD_TERRITORIAL"].dropna().unique()),
+                            default=st.session_state.filters["ut"])
+with col2:
+    mes_sel = st.multiselect("Mes:", sorted(df["MES"].dropna().unique()),
+                             default=st.session_state.filters["mes"])
+with col3:
+    sup_sel = st.multiselect("Supervisor:", sorted(df["SUPERVISOR"].dropna().unique()),
+                             default=st.session_state.filters["sup"])
+
+st.session_state.filters.update({"ut": ut_sel, "mes": mes_sel, "sup": sup_sel})
+
+df_filtrado = df.copy()
+if ut_sel: df_filtrado = df_filtrado[df_filtrado["UNIDAD_TERRITORIAL"].isin(ut_sel)]
+if mes_sel: df_filtrado = df_filtrado[df_filtrado["MES"].isin(mes_sel)]
+if sup_sel: df_filtrado = df_filtrado[df_filtrado["SUPERVISOR"].isin(sup_sel)]
+
+if df_filtrado.empty:
+    st.warning("No hay registros que coincidan con los filtros seleccionados.")
+    st.stop()
+
+# ==============================================================
+# 💬 RESUMEN AUTOMÁTICO (IA)
+# ==============================================================
+
+contexto_llm = {
+    "unidad_territorial": ut_sel or "todas",
+    "mes": mes_sel or "todos",
+    "supervisor": sup_sel or "todos",
+    "porcentajes_globales": {
+        "adolescentes": df_filtrado["PORCENTAJE_ADOLES"].mean() if "PORCENTAJE_ADOLES" in df_filtrado else None,
+        "independencia": df_filtrado["PORCENTAJE_INDEP"].mean() if "PORCENTAJE_INDEP" in df_filtrado else None,
+        "total": df_filtrado["PORCENTAJE_TOTAL"].mean() if "PORCENTAJE_TOTAL" in df_filtrado else None
     }
-    try:
+}
+
+try:
+    with st.spinner("Generando resumen operativo..."):
+        texto = generate_anexo4_summary(contexto_llm)
         import re
-        with st.spinner("Generando resumen ejecutivo..."):
-            texto = generate_section_insight(contexto)
-        texto = re.sub(r"<[^>]+>", "", texto)
-        texto = re.sub(r"\[[^\]]+\]", "", texto).strip()
+        texto_limpio = re.sub(r"<[^>]+>", "", texto)
         st.markdown(
             f"""
-            <div style="font-size:16px; line-height:1.6; color:#222; background-color:#f9fafb;
-                        padding:15px; border-radius:8px; border-left:5px solid #004C97;">
-                {texto}
-            </div>
+            <div style="margin-top:10px; font-size:15.5px; line-height:1.7; color:#333333;
+            font-family:'Source Sans Pro',sans-serif;">{texto_limpio}</div>
             """,
             unsafe_allow_html=True
         )
-    except Exception as e:
-        st.warning(f"No fue posible generar el resumen para {etiqueta}.")
-        st.text(str(e))
+except Exception as e:
+    st.warning("No fue posible generar el resumen automático.")
+    st.text(str(e))
 
-# --------------------------------------------------------------
-# BLOQUE 1 – PROYECTO VIDA ADOLESCENTE (ITEM_1 a ITEM_12)
-# --------------------------------------------------------------
-st.subheader("Proyecto Vida Adolescente")
-resumen_ia(df_filtrado, bloques["Proyecto Vida Adolescente"], "Proyecto Vida Adolescente", mapa_items)
-fig1 = grafico_apilado(df_filtrado, bloques["Proyecto Vida Adolescente"],
-                       "Evaluación del Proyecto Vida Adolescente", mapa_items)
-if fig1:
-    st.plotly_chart(fig1, use_container_width=True)
-st.markdown("---")
+st.markdown("<br><hr style='border:0.5px solid #ddd;margin:25px 0;'>", unsafe_allow_html=True)
 
-# --------------------------------------------------------------
-# BLOQUE 2 – INDEPENDENCIA ECONÓMICA (ITEM_13 a ITEM_18)
-# --------------------------------------------------------------
-st.subheader("Independencia Económica")
-resumen_ia(df_filtrado, bloques["Independencia Económica"], "Independencia Económica", mapa_items)
-fig2 = grafico_apilado(df_filtrado, bloques["Independencia Económica"],
-                       "Evaluación de Independencia Económica", mapa_items)
-if fig2:
-    st.plotly_chart(fig2, use_container_width=True)
+# ==============================================================
+# 📊 RANKING GLOBAL POR COMPONENTE
+# ==============================================================
+
+componentes = {
+    "Adolescentes": ("PORCENTAJE_ADOLES", "EVALUACION_ADOLES"),
+    "Independencia Económica": ("PORCENTAJE_INDEP", "EVALUACION_INDEP"),
+    "Total": ("PORCENTAJE_TOTAL", "EVALUACION_TOTAL")
+}
+
+for nombre, (col_pct, col_eval) in componentes.items():
+    if col_pct in df_filtrado.columns and col_eval in df_filtrado.columns:
+        st.markdown(f"### 🔹 {nombre}")
+
+        ranking = (
+            df_filtrado.groupby("UNIDAD_TERRITORIAL", as_index=False)
+            .agg(
+                PORCENTAJE=(col_pct, "mean"),
+                EVALUACION=(col_eval, lambda x: x.mode()[0] if not x.mode().empty else "Sin dato")
+            )
+            .sort_values("PORCENTAJE", ascending=False)
+        )
+        ranking["PORCENTAJE"] = (ranking["PORCENTAJE"] * 100).round(1)
+
+        col1, col2 = st.columns(2)
+        n_show = min(5, len(ranking))
+
+        with col1:
+            fig_top = px.bar(
+                ranking.head(n_show),
+                x="PORCENTAJE",
+                y="UNIDAD_TERRITORIAL",
+                orientation="h",
+                color="EVALUACION",
+                color_discrete_map={
+                    "DEFICIENTE": "#C62828",
+                    "REGULAR": "#F9A825",
+                    "BUENO": "#2E7D32",
+                    "EXCELENTE": "#1565C0",
+                    "Sin dato": "#90A4AE"
+                },
+                text_auto=".1f",
+                title=f"🔹 Mejores UT – {nombre}"
+            )
+            fig_top.update_layout(xaxis_title="Porcentaje (%)", yaxis_title=None, height=380)
+            st.plotly_chart(fig_top, use_container_width=True)
+
+        with col2:
+            fig_bottom = px.bar(
+                ranking.tail(n_show).sort_values("PORCENTAJE", ascending=True),
+                x="PORCENTAJE",
+                y="UNIDAD_TERRITORIAL",
+                orientation="h",
+                color="EVALUACION",
+                color_discrete_map={
+                    "DEFICIENTE": "#C62828",
+                    "REGULAR": "#F9A825",
+                    "BUENO": "#2E7D32",
+                    "EXCELENTE": "#1565C0",
+                    "Sin dato": "#90A4AE"
+                },
+                text_auto=".1f",
+                title=f"🔸 Menor desempeño – {nombre}"
+            )
+            fig_bottom.update_layout(xaxis_title="Porcentaje (%)", yaxis_title=None, height=380)
+            st.plotly_chart(fig_bottom, use_container_width=True)
+
+        st.markdown("<br>", unsafe_allow_html=True)
+
+# ==============================================================
+# 🔥 MAPA DE CALOR – PROMEDIO DE ÍTEMS
+# ==============================================================
+
+cols_items = [c for c in df_filtrado.columns if c.startswith("ITEM_")]
+if cols_items:
+    heat = df_filtrado.groupby("UNIDAD_TERRITORIAL")[cols_items].mean().reset_index()
+    heat_melt = heat.melt(id_vars="UNIDAD_TERRITORIAL", var_name="Ítem", value_name="Promedio")
+
+    heat_melt["Etiqueta"] = heat_melt["Ítem"].apply(lambda x: x.replace("ITEM_", "Item "))
+    heat_melt["num_item"] = heat_melt["Etiqueta"].str.extract(r"(\d+)").astype(int)
+    heat_melt = heat_melt.sort_values("num_item")
+
+    matriz = heat_melt.pivot(index="UNIDAD_TERRITORIAL", columns="Etiqueta", values="Promedio")
+    matriz = matriz.reindex(sorted(matriz.columns, key=lambda x: int(x.split(" ")[1])), axis=1)
+
+    fig_heat = px.imshow(
+        matriz,
+        color_continuous_scale="YlOrRd",
+        title="Mapa de calor – Promedio de cumplimiento por ítem y Unidad Territorial"
+    )
+    fig_heat.update_layout(
+        height=650,
+        margin=dict(l=60, r=60, t=60, b=60),
+        coloraxis_colorbar=dict(title="Promedio"),
+        xaxis_title="Ítems evaluados",
+        yaxis_title="Unidad Territorial"
+    )
+    st.plotly_chart(fig_heat, use_container_width=True)

@@ -1,16 +1,17 @@
 # ==============================================================
-# ACOMPAÑAMIENTO DIFERENCIADO – ANEXO 3
-# MIDIS | UCC 2025 – Versión profesional y armonizada
+# MONITOREO A LAS ACCIONES DE ACOMPAÑAMIENTO DIFERENCIADO
+# CON GESTIÓN TERRITORIAL – ANEXO 3 (versión final optimizada)
 # ==============================================================
 
 import streamlit as st
 import pandas as pd
-import plotly.graph_objects as go
+import plotly.express as px
 from pathlib import Path
 import yaml
+import logging
 from utils.loaders import cargar_datos
 from utils.style import aplicar_estilos
-from utils.llm import generate_section_summary  # se reutiliza la función IA
+from utils.llm import generate_anexo3_summary  # ⚠️ Asegúrate de definir esta función en utils/llm.py
 
 # ==============================================================
 # CONFIGURACIÓN DE PÁGINA
@@ -18,31 +19,53 @@ from utils.llm import generate_section_summary  # se reutiliza la función IA
 
 st.set_page_config(
     page_title="Anexo 3 – Acompañamiento Diferenciado",
-    page_icon="👥",
+    page_icon="🧩",
     layout="wide"
 )
 aplicar_estilos()
 
-# ==============================================================
-# CABECERA
-# ==============================================================
-
-st.title("Acompañamiento Diferenciado")
+st.title("Acompañamiento Diferenciado con Gestión Territorial")
 st.markdown("<br>", unsafe_allow_html=True)
 
 # ==============================================================
-# CARGA DE DATOS
+# CARGA DE DATOS Y VALIDACIONES
 # ==============================================================
 
-data = cargar_datos()
-df = data.get("a3")  # base consolidada del anexo 3
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
+@st.cache_data(show_spinner=False)
+def cargar_y_preparar_datos():
+    """Carga datos del Anexo 3 y valida estructura."""
+    try:
+        data = cargar_datos()
+        df = data.get("a3")
+
+        if df is None or df.empty:
+            st.warning("No se encontró el archivo `anexo3_consolidado.xlsx` en `/data/processed/`.")
+            return None
+
+        if "MES" in df.columns:
+            df["MES"] = pd.to_numeric(df["MES"], errors="coerce")
+
+        cols_min = {"UNIDAD_TERRITORIAL", "MES", "SUPERVISOR"}
+        if not cols_min.issubset(set(df.columns)):
+            faltantes = cols_min - set(df.columns)
+            st.error(f"Faltan columnas requeridas: {', '.join(faltantes)}")
+            return None
+
+        return df
+
+    except Exception as e:
+        st.error(f"❌ Error al cargar datos: {e}")
+        logging.exception(e)
+        return None
+
+df = cargar_y_preparar_datos()
 if df is None:
-    st.warning("⚠️ No se encontró el archivo `anexo3_consolidado.xlsx` en `/data/processed/`.")
     st.stop()
 
 # ==============================================================
-# CARGAR YAML DE NOMBRES DE ÍTEMS
+# CONFIGURACIÓN YAML
 # ==============================================================
 
 BASE_DIR = Path(__file__).resolve().parents[2]
@@ -52,21 +75,30 @@ try:
     with open(YAML_PATH, "r", encoding="utf-8") as f:
         config_a3 = yaml.safe_load(f)
         mapa_items = config_a3.get("items_nombres", {})
+        grupos_items = config_a3.get("grupos_items", {})
 except Exception as e:
     st.error(f"❌ Error al leer {YAML_PATH.name}: {e}")
-    mapa_items = {}
+    mapa_items, grupos_items = {}, {}
 
 # ==============================================================
-# FILTROS
+# FILTROS CON PERSISTENCIA
 # ==============================================================
+
+if "filters_a3" not in st.session_state:
+    st.session_state.filters_a3 = {"ut": [], "mes": [], "sup": []}
 
 col1, col2, col3 = st.columns(3)
 with col1:
-    ut_sel = st.multiselect("Unidad Territorial:", sorted(df["UNIDAD_TERRITORIAL"].dropna().unique()))
+    ut_sel = st.multiselect("Unidad Territorial:", sorted(df["UNIDAD_TERRITORIAL"].dropna().unique()),
+                            default=st.session_state.filters_a3["ut"])
 with col2:
-    mes_sel = st.multiselect("Mes:", sorted(df["MES"].dropna().unique()))
+    mes_sel = st.multiselect("Mes:", sorted(df["MES"].dropna().unique()),
+                             default=st.session_state.filters_a3["mes"])
 with col3:
-    sup_sel = st.multiselect("Supervisor:", sorted(df["SUPERVISOR"].dropna().unique()))
+    sup_sel = st.multiselect("Supervisor:", sorted(df["SUPERVISOR"].dropna().unique()),
+                             default=st.session_state.filters_a3["sup"])
+
+st.session_state.filters_a3.update({"ut": ut_sel, "mes": mes_sel, "sup": sup_sel})
 
 df_filtrado = df.copy()
 if ut_sel:
@@ -77,187 +109,156 @@ if sup_sel:
     df_filtrado = df_filtrado[df_filtrado["SUPERVISOR"].isin(sup_sel)]
 
 if df_filtrado.empty:
-    st.warning("⚠️ No hay registros que coincidan con los filtros seleccionados.")
+    st.warning("No hay registros que coincidan con los filtros seleccionados.")
     st.stop()
 
 # ==============================================================
-# KPI GLOBALES (BRECHAS)
+# 🚨 TARJETAS DE ÍTEMS 'NO CUMPLE' – Estilo Anexo 2
 # ==============================================================
 
-grupos = {
-    "Rol del Gestor Local": [f"ITEM_{i}" for i in range(1, 7)],
-    "Facilitador(a)": [f"ITEM_{i}" for i in range(7, 13)],
-    "Coordinador Técnico Zonal (CTZ)": [f"ITEM_{i}" for i in range(13, 18)]
+import streamlit.components.v1 as components
+
+st.markdown("###### Actividades con riesgo o incumplimiento detectado")
+cols_items = [c for c in df_filtrado.columns if c.startswith("ITEM_")]
+
+# Calcular frecuencia y porcentaje de 'no cumple'
+freq_0 = (df_filtrado[cols_items] == 0).sum()
+total_eval = len(df_filtrado)
+pct_0 = ((df_filtrado[cols_items] == 0).sum() / total_eval * 100).round(1)
+no_cumple = pct_0[pct_0 > 0].sort_values(ascending=False)
+
+if no_cumple.empty:
+    st.info("No se registran ítems con valor 'No cumple' en la selección actual.")
+else:
+    tarjetas_html = """
+    <style>
+    .grid-container {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 18px;
+        padding: 20px 0;
+    }
+    .tarjeta {
+        flex: 0 1 calc(33.333% - 18px);
+        box-sizing: border-box;
+        border-radius: 10px;
+        background-color: #FDEAEA;
+        border: 1.5px solid #C62828;
+        padding: 18px 20px;
+        font-family: 'Source Sans Pro', sans-serif;
+        text-align: left;
+        min-width: 280px;
+        max-width: 340px;
+    }
+    .tarjeta p {
+        margin: 0;
+        color: #B71C1C;
+        font-weight: 700;
+        font-size: 17px;
+        line-height: 1.4;
+    }
+    .tarjeta .porcentaje {
+        display: block;
+        margin-top: 10px;
+        font-size: 13px;
+        font-weight: 700;
+        color: #5C0000;
+    }
+    @media (max-width: 1000px) {
+        .tarjeta { flex: 0 1 calc(45% - 18px); }
+    }
+    @media (max-width: 600px) {
+        .tarjeta { flex: 0 1 100%; }
+    }
+    </style>
+
+    <div class="grid-container">
+    """
+
+    for item, porcentaje in no_cumple.items():
+        nombre = mapa_items.get(item, item)
+        freq = int(freq_0[item])
+        tarjetas_html += f"""
+        <div class="tarjeta">
+            <p>{nombre}</p>
+            <span class="porcentaje">{freq} de {total_eval} fichas ({porcentaje}%) con 'No cumple'</span>
+        </div>
+        """
+
+    tarjetas_html += "</div>"
+    components.html(tarjetas_html, height=500, scrolling=False)
+
+# ==============================================================
+# 💬 RESUMEN AUTOMÁTICO (IA)
+# ==============================================================
+
+cols_items = [c for c in df_filtrado.columns if c.startswith("ITEM_")]
+df_items = df_filtrado[cols_items].copy()
+valores = df_items.values.flatten()
+valores = valores[~pd.isna(valores)]
+
+total_validos = int(len(valores))
+total_0 = int((valores == 0).sum())
+total_1 = int((valores == 1).sum())
+total_2 = int((valores == 2).sum())
+
+contexto_llm = {
+    "total_registros": len(df_filtrado),
+    "porcentajes": {
+        "no_cumple": round(total_0 / total_validos * 100, 1) if total_validos else 0,
+        "en_desarrollo": round(total_1 / total_validos * 100, 1) if total_validos else 0,
+        "cumple": round(total_2 / total_validos * 100, 1) if total_validos else 0
+    },
+    "filtros": {
+        "unidad_territorial": ut_sel or "todas",
+        "mes": mes_sel or "todos",
+        "supervisor": sup_sel or "todos"
+    }
 }
 
-def porcentaje_valor(df, items, valor):
-    subset = df[items]
-    total_validos = subset.notna().sum().sum()
-    if total_validos == 0:
-        return 0
-    total_valor = (subset == valor).sum().sum()
-    return round((total_valor / total_validos) * 100, 1)
-
-col1, col2, col3 = st.columns(3)
-with col1:
-    st.metric("❌ % No Cumple – Rol del Gestor", f"{porcentaje_valor(df_filtrado, grupos['Rol del Gestor Local'], 0)}%")
-with col2:
-    st.metric("❌ % No Cumple – Facilitador(a)", f"{porcentaje_valor(df_filtrado, grupos['Facilitador(a)'], 0)}%")
-with col3:
-    st.metric("❌ % No Cumple – CTZ", f"{porcentaje_valor(df_filtrado, grupos['Coordinador Técnico Zonal (CTZ)'], 0)}%")
-
-st.markdown("---")
-
-# ==============================================================
-# FUNCIÓN DE PROCESAMIENTO Y GRÁFICO
-# ==============================================================
-
-def generar_grafico(df, items, titulo, mapa_items):
-    registros = []
-    for item in items:
-        if item in df.columns:
-            total = df[item].notna().sum()
-            if total == 0:
-                continue
-            counts = df[item].value_counts().reindex([0, 1, 2], fill_value=0)
-            for valor, freq in counts.items():
-                registros.append({
-                    "Ítem": item,
-                    "Descripción": mapa_items.get(item, item),
-                    "Valor": valor,
-                    "Frecuencia": freq,
-                    "Porcentaje": round((freq / total) * 100, 1)
-                })
-    if not registros:
-        return None
-
-    df_p = pd.DataFrame(registros).pivot_table(
-        index=["Ítem", "Descripción"],
-        columns="Valor",
-        values="Porcentaje",
-        fill_value=0
-    ).reset_index()
-
-    df_p.columns.name = None
-    df_p = df_p.rename(columns={0: "❌ No cumple", 1: "⚠️ En desarrollo", 2: "✅ Cumple"})
-    df_p["Ítem_nro"] = df_p["Ítem"].str.extract(r"(\d+)").astype(int)
-    df_p = df_p.sort_values("Ítem_nro")
-
-    color_map = {
-        "❌ No cumple": "#D32F2F",
-        "⚠️ En desarrollo": "#FBC02D",
-        "✅ Cumple": "#388E3C"
-    }
-
-    fig = go.Figure()
-    for col in ["❌ No cumple", "⚠️ En desarrollo", "✅ Cumple"]:
-        fig.add_trace(go.Bar(
-            y=df_p["Descripción"],
-            x=df_p[col],
-            name=col,
-            orientation="h",
-            marker=dict(color=color_map[col]),
-            hovertemplate=f"<b>{col}:</b> %{{x:.1f}}%<extra></extra>"
-        ))
-
-    fig.update_layout(
-        title=titulo,
-        barmode="stack",
-        xaxis=dict(title="Porcentaje (%)", range=[0, 100], showgrid=True, gridcolor="#ECEFF1"),
-        yaxis=dict(title="", showgrid=False, autorange="reversed"),
-        plot_bgcolor="#FFFFFF",
-        paper_bgcolor="#FFFFFF",
-        font=dict(size=12, color="#003A70"),
-        title_font=dict(size=16, color="#003A70"),
-        legend_title_text="Estado del ítem",
-        bargap=0.15,
-        margin=dict(t=60, b=30, l=250, r=80),
-        height=500
-    )
-    return fig
-
-# ==============================================================
-# BLOQUES POR SECCIÓN
-# ==============================================================
-
-def ranking_items_subset(df, items, valor, etiqueta_map):
-    s = df[items].apply(lambda col: (col == valor).sum())
-    s = s[s > 0].sort_values(ascending=False)
-    # Devolvemos TODOS (tú decides si recortar a N en el futuro)
-    return [{"item": k, "nombre": etiqueta_map.get(k, k), "freq": int(v)} for k, v in s.items()]
-
-def generar_resumen(df, items, etiqueta, mapa_items):
-    """Genera resumen IA con análisis y recomendaciones por bloque (subconjunto correcto)."""
-    def pct(df, items, v):
-        subset = df[items]
-        tot = subset.notna().sum().sum()
-        if tot == 0:
-            return 0.0
-        return round(((subset == v).sum().sum() / tot) * 100, 1)
-
-    contexto = {
-        "anexo": "Anexo 3 – Acompañamiento Diferenciado",
-        "seccion": etiqueta,
-        "porcentajes": {
-            "no_cumple": pct(df, items, 0),
-            "en_desarrollo": pct(df, items, 1),
-            "cumple": pct(df, items, 2),
-        },
-        "top_no_cumple": ranking_items_subset(df, items, 0, mapa_items),
-        "top_en_desarrollo": ranking_items_subset(df, items, 1, mapa_items),
-    }
-
-    try:
-        with st.spinner("Generando resumen ejecutivo..."):
-            texto = generate_section_summary(contexto)
-            import re
-            texto_limpio = re.sub(r"<[^>]+>", "", texto)
-            texto_limpio = re.sub(r"\[[^\]]+\]", "", texto_limpio)
-            texto_limpio = texto_limpio.strip()
-
+try:
+    with st.spinner("Generando resumen analítico..."):
+        texto = generate_anexo3_summary(contexto_llm)
         st.markdown(
             f"""
-            <div style="font-size:16px; line-height:1.6; color:#222; background-color:#f9fafb;
-                        padding:15px; border-radius:8px; border-left:5px solid #004C97;">
-                {texto_limpio}
-            </div>
+            <div style="margin-top:25px; font-size:15.5px; line-height:1.7;
+            color:#333; font-family:'Source Sans Pro',sans-serif;">{texto}</div>
             """,
             unsafe_allow_html=True
         )
-    except Exception as e:
-        st.warning(f"No fue posible generar el resumen para {etiqueta}.")
-        st.text(str(e))
+except Exception as e:
+    st.warning("No fue posible generar el resumen automático.")
+    st.text(str(e))
+
+st.markdown("<br><hr style='border:0.5px solid #ddd;margin:25px 0;'>", unsafe_allow_html=True)
 
 # ==============================================================
-# SECCIÓN 1 – ROL DEL GESTOR LOCAL
+# 🔸 MAPA DE CALOR DE ÍTEMS
 # ==============================================================
 
-st.subheader("Rol del Gestor Local")
-generar_resumen(df_filtrado, grupos["Rol del Gestor Local"], "Rol del Gestor Local", mapa_items)
-fig1 = generar_grafico(df_filtrado, grupos["Rol del Gestor Local"],
-                       "Evaluación del Rol del Gestor Local", mapa_items)
-if fig1:
-    st.plotly_chart(fig1, use_container_width=True)
-st.markdown("---")
+cols_items = [c for c in df_filtrado.columns if c.startswith("ITEM_")]
+if cols_items:
+    heat = df_filtrado.groupby("UNIDAD_TERRITORIAL")[cols_items].mean().reset_index()
+    heat_melt = heat.melt(id_vars="UNIDAD_TERRITORIAL", var_name="Ítem", value_name="Promedio")
+    heat_melt["Etiqueta"] = heat_melt["Ítem"].apply(lambda x: x.replace("ITEM_", "Item "))
+    heat_melt["num_item"] = heat_melt["Etiqueta"].str.extract(r"(\d+)").astype(int)
+    heat_melt = heat_melt.sort_values("num_item")
 
-# ==============================================================
-# SECCIÓN 2 – FACILITADOR(A)
-# ==============================================================
+    matriz = heat_melt.pivot(index="UNIDAD_TERRITORIAL", columns="Etiqueta", values="Promedio")
+    matriz = matriz.reindex(sorted(matriz.columns, key=lambda x: int(x.split(" ")[1])), axis=1)
 
-st.subheader("Facilitador(a)")
-generar_resumen(df_filtrado, grupos["Facilitador(a)"], "Facilitador(a)", mapa_items)
-fig2 = generar_grafico(df_filtrado, grupos["Facilitador(a)"], "Evaluación del Facilitador(a)", mapa_items)
-if fig2:
-    st.plotly_chart(fig2, use_container_width=True)
-st.markdown("---")
+    fig_heat = px.imshow(
+        matriz,
+        color_continuous_scale="YlOrRd",
+        title="Mapa de calor – Promedio de cumplimiento por ítem y Unidad Territorial"
+    )
 
-# ==============================================================
-# SECCIÓN 3 – COORDINADOR TÉCNICO ZONAL (CTZ)
-# ==============================================================
-
-st.subheader("Coordinador Técnico Zonal (CTZ)")
-generar_resumen(df_filtrado, grupos["Coordinador Técnico Zonal (CTZ)"], "Coordinador Técnico Zonal (CTZ)", mapa_items)
-fig3 = generar_grafico(df_filtrado, grupos["Coordinador Técnico Zonal (CTZ)"],
-                       "Evaluación del Coordinador Técnico Zonal (CTZ)", mapa_items)
-if fig3:
-    st.plotly_chart(fig3, use_container_width=True)
+    fig_heat.update_layout(
+        height=650,
+        margin=dict(l=60, r=60, t=60, b=60),
+        coloraxis_colorbar=dict(title="Promedio"),
+        xaxis_title="Ítems evaluados",
+        yaxis_title="Unidad Territorial"
+    )
+    st.plotly_chart(fig_heat, use_container_width=True)

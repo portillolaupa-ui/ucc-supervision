@@ -11,6 +11,8 @@ import yaml
 from utils.loaders import cargar_datos
 from utils.style import aplicar_estilos
 from utils.llm import generate_anexo2_summary
+import plotly.express as px
+
 
 
 # ==============================================================
@@ -148,55 +150,6 @@ if sup_sel:
 if df_filtrado.empty:
     st.warning("No hay registros que coincidan con los filtros seleccionados.")
     st.stop()
-
-# ==============================================================
-# 📊 GRÁFICO COMPARATIVO POR UNIDAD TERRITORIAL
-# ==============================================================
-
-# Asegurar que existan las columnas necesarias
-if all(col in df_filtrado.columns for col in ["UNIDAD_TERRITORIAL", "PORCENTAJE", "EVALUACION"]):
-    # Agrupar por UT y evaluación, calcular promedio de porcentaje
-    df_graf = (
-        df_filtrado.groupby(["UNIDAD_TERRITORIAL", "EVALUACION"], as_index=False)["PORCENTAJE"]
-        .mean()
-    )
-
-    # Crear gráfico de barras agrupadas
-    fig = go.Figure()
-
-    evaluaciones = df_graf["EVALUACION"].unique()
-    colores = {
-        "BUENO": "#2E7D32",
-        "REGULAR": "#F9A825",
-        "DEFICIENTE": "#C62828"
-    }
-
-    for eval_ in evaluaciones:
-        df_sub = df_graf[df_graf["EVALUACION"] == eval_]
-        fig.add_trace(go.Bar(
-            x=df_sub["UNIDAD_TERRITORIAL"],
-            y=df_sub["PORCENTAJE"],
-            name=eval_,
-            marker_color=colores.get(eval_, "#90A4AE"),
-            text=(df_sub["PORCENTAJE"] * 100).round(1).astype(str) + "%",
-            textposition="outside"
-        ))
-
-    fig.update_layout(
-        barmode="group",
-        xaxis_title="Unidad Territorial",
-        yaxis_title="Porcentaje de cumplimiento",
-        title="Desempeño por Unidad Territorial y resultado",
-        template="simple_white",
-        height=500,
-        legend_title="Evaluación",
-        margin=dict(t=70, l=40, r=40, b=70)
-    )
-
-    st.plotly_chart(fig, use_container_width=True)
-
-else:
-    st.warning("No se encontraron las columnas 'UNIDAD_TERRITORIAL', 'PORCENTAJE' o 'EVALUACION' para generar el gráfico.")
 
 # ==============================================================
 # 🚨 TARJETAS DE ÍTEMS 'NO CUMPLE' – ALERTAS OPERATIVAS (versión visual mejorada)
@@ -390,3 +343,145 @@ try:
 except Exception as e:
     st.warning("No fue posible generar el resumen automático.")
     st.text(str(e))
+
+st.markdown("<br><hr style='border:0.5px solid #ddd;margin:25px 0;'>", unsafe_allow_html=True)
+
+
+# ==============================================================
+# 🔸 RANKING DE UNIDADES TERRITORIALES (corregido)
+# ==============================================================
+
+ranking = (
+    df_filtrado.groupby("UNIDAD_TERRITORIAL", as_index=False)
+    .agg(
+        PORCENTAJE=("PORCENTAJE", "mean"),
+        EVALUACION=("EVALUACION", lambda x: x.mode()[0] if not x.mode().empty else "Sin dato")
+    )
+    .sort_values("PORCENTAJE", ascending=False)
+)
+ranking["PORCENTAJE"] = (ranking["PORCENTAJE"] * 100).round(1)
+
+n_ut = ranking["UNIDAD_TERRITORIAL"].nunique()
+n_show = min(5, n_ut)
+
+ranking_top = ranking.head(n_show)
+ranking_bottom = ranking.tail(n_show).sort_values(by="PORCENTAJE", ascending=True)
+
+col1, col2 = st.columns(2)
+
+with col1:
+    fig_top = px.bar(
+        ranking_top,
+        x="PORCENTAJE",
+        y="UNIDAD_TERRITORIAL",
+        orientation="h",
+        color="EVALUACION",
+        color_discrete_map={
+            "DEFICIENTE": "#C62828",
+            "REGULAR": "#F9A825",
+            "BUENO": "#2E7D32",
+            "EXCELENTE": "#1565C0",
+            "Sin dato": "#90A4AE"
+        },
+        text_auto=".1f",
+        title=f"🔹 Unidades territoriales con mejor desempeño"
+    )
+    fig_top.update_layout(
+        xaxis_title="Porcentaje (%)",
+        yaxis_title=None,
+        plot_bgcolor="white",
+        height=400,
+        margin=dict(l=60, r=40, t=60, b=40)
+    )
+    st.plotly_chart(fig_top, use_container_width=True)
+
+with col2:
+    fig_bottom = px.bar(
+        ranking_bottom,
+        x="PORCENTAJE",
+        y="UNIDAD_TERRITORIAL",
+        orientation="h",
+        color="EVALUACION",
+        color_discrete_map={
+            "DEFICIENTE": "#C62828",
+            "REGULAR": "#F9A825",
+            "BUENO": "#2E7D32",
+            "EXCELENTE": "#1565C0",
+            "Sin dato": "#90A4AE"
+        },
+        text_auto=".1f",
+        title=f"🔸 Unidades Territoriales con menor desempeño"
+    )
+    fig_bottom.update_layout(
+        xaxis_title="Porcentaje (%)",
+        yaxis_title=None,
+        plot_bgcolor="white",
+        height=400,
+        margin=dict(l=60, r=40, t=60, b=40)
+    )
+    st.plotly_chart(fig_bottom, use_container_width=True)
+
+
+# ==============================================================
+# 🔸 DISPERSIÓN Y VARIABILIDAD
+# ==============================================================
+
+if "ITEMS_VALIDO" in df_filtrado.columns:
+    disp = (
+        df_filtrado.groupby("UNIDAD_TERRITORIAL")[["PORCENTAJE", "ITEMS_VALIDO"]]
+        .mean()
+        .reset_index()
+    )
+    disp["PORCENTAJE"] = (disp["PORCENTAJE"] * 100).round(1)
+
+    fig_disp = px.scatter(
+        disp,
+        x="ITEMS_VALIDO",
+        y="PORCENTAJE",
+        text="UNIDAD_TERRITORIAL",
+        title="Relación entre Porcentaje de cumplimiento y número de ítems válidos",
+        color_discrete_sequence=["#1565C0"]
+    )
+    fig_disp.update_traces(textposition="top center")
+    fig_disp.update_layout(
+        xaxis_title="Ítems válidos",
+        yaxis_title="Porcentaje de cumplimiento",
+    )
+    st.plotly_chart(fig_disp, use_container_width=True)
+
+
+
+# ==============================================================
+# 🔸 MAPA DE CALOR DE ÍTEMS (versión limpia y profesional)
+# ==============================================================
+
+cols_items = [c for c in df_filtrado.columns if c.startswith("ITEM_")]
+if cols_items:
+    heat = df_filtrado.groupby("UNIDAD_TERRITORIAL")[cols_items].mean().reset_index()
+    heat_melt = heat.melt(id_vars="UNIDAD_TERRITORIAL", var_name="Ítem", value_name="Promedio")
+
+    # Eje X limpio: solo Item 1, Item 2, etc.
+    heat_melt["Etiqueta"] = heat_melt["Ítem"].apply(lambda x: x.replace("ITEM_", "Item "))
+    # Asegurar orden numérico de los ítems
+    heat_melt["num_item"] = heat_melt["Etiqueta"].str.extract(r"(\d+)").astype(int)
+    heat_melt = heat_melt.sort_values("num_item")
+
+    matriz = heat_melt.pivot(index="UNIDAD_TERRITORIAL", columns="Etiqueta", values="Promedio")
+    matriz = matriz.reindex(sorted(matriz.columns, key=lambda x: int(x.split(" ")[1])), axis=1)
+
+    fig_heat = px.imshow(
+        matriz,
+        color_continuous_scale="YlOrRd",
+        title="Mapa de calor – Promedio de cumplimiento por ítem y Unidad Territorial"
+    )
+
+    fig_heat.update_layout(
+        height=650,
+        margin=dict(l=60, r=60, t=60, b=60),
+        coloraxis_colorbar=dict(title="Promedio"),
+        xaxis_title="Ítems evaluados",
+        yaxis_title="Unidad Territorial"
+    )
+
+    st.plotly_chart(fig_heat, use_container_width=True)
+

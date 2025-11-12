@@ -127,3 +127,149 @@ def generate_anexo2_summary(
     )
 
     return resp.choices[0].message.content.strip()
+
+# ==============================================================
+# 💬 GENERADOR DE RESUMEN – ANEXO 3 (versión breve y ejecutiva)
+# ==============================================================
+
+def generate_anexo3_summary(contexto: dict) -> str:
+    """
+    Genera un resumen analítico breve y recomendaciones operativas
+    del Anexo 3 – Acompañamiento Diferenciado.
+    Redacta un texto claro, técnico y conciso (máx. 6 líneas).
+    """
+
+    try:
+        import json
+        from openai import OpenAI
+        import streamlit as st
+
+        # Inicializar cliente
+        api_key = st.secrets.get("openai_api_key")
+        base_url = st.secrets.get("openai_base_url", "https://api.openai.com/v1")
+        client = OpenAI(api_key=api_key, base_url=base_url)
+
+        # Convertir contexto a JSON legible
+        contexto_json = json.dumps(contexto, ensure_ascii=False, indent=2)
+
+        prompt = f"""
+        Eres un analista del Programa JUNTOS.
+        Resume de forma breve y profesional los resultados del Anexo 3 – Acompañamiento Diferenciado.
+        
+        Instrucciones:
+        - Máximo 6 líneas.
+        - No incluyas títulos como “Resumen Ejecutivo”.
+        - Usa tono técnico y directo.
+        - Incluye: síntesis del cumplimiento, una conclusión global y 1 o 2 recomendaciones concretas.
+
+        CONTEXTO:
+        {contexto_json}
+        """
+
+        completion = client.chat.completions.create(
+            model="gpt-4o-mini",
+            temperature=0.4,
+            messages=[
+                {"role": "system", "content": "Eres un especialista en monitoreo y evaluación del MIDIS."},
+                {"role": "user", "content": prompt}
+            ]
+        )
+
+        texto = completion.choices[0].message.content.strip()
+        return texto
+
+    except Exception as e:
+        return f"⚠️ Error al generar el resumen del Anexo 3: {e}"
+
+# ==============================================================
+# 💬 GENERADOR DE RESUMEN – ANEXO 4 (versión breve)
+# ==============================================================
+
+def generate_anexo4_summary(contexto: dict) -> str:
+    """
+    Genera un resumen operativo breve del Anexo 4 – Acompañamiento a Jóvenes.
+    Incluye síntesis de resultados y 2 recomendaciones clave.
+    """
+    try:
+        import json
+        from openai import OpenAI
+        import streamlit as st
+
+        api_key = st.secrets.get("openai_api_key")
+        base_url = st.secrets.get("openai_base_url", "https://api.openai.com/v1")
+        client = OpenAI(api_key=api_key, base_url=base_url)
+
+        contexto_json = json.dumps(contexto, ensure_ascii=False, indent=2)
+        prompt = f"""
+        Redacta un resumen técnico breve (máximo 6 líneas) sobre el Anexo 4 – Acompañamiento a Jóvenes.
+        Usa tono institucional, directo y analítico.
+        No incluyas títulos ni encabezados.
+        Menciona los resultados generales y 2 recomendaciones operativas.
+
+        CONTEXTO:
+        {contexto_json}
+        """
+
+        completion = client.chat.completions.create(
+            model="gpt-4o-mini",
+            temperature=0.4,
+            messages=[
+                {"role": "system", "content": "Eres un especialista en monitoreo territorial y análisis operativo del MIDIS."},
+                {"role": "user", "content": prompt}
+            ]
+        )
+
+        texto = completion.choices[0].message.content.strip()
+        return texto
+
+    except Exception as e:
+        return f"⚠️ Error al generar el resumen del Anexo 4: {e}"
+
+# ==============================================================
+# 💬 GENERADOR DE ANÁLISIS – ANEXO 5 (ACUERDOS Y PUNTOS CRÍTICOS)
+# ==============================================================
+
+def generate_anexo5_summary(contexto: dict) -> str:
+    """
+    Resume los principales hallazgos, acuerdos y puntos críticos del Anexo 5.
+    Redacta máximo 7 líneas, con enfoque en seguimiento operativo.
+    """
+    try:
+        import json
+        from openai import OpenAI
+        import streamlit as st
+
+        api_key = st.secrets.get("openai_api_key")
+        base_url = st.secrets.get("openai_base_url", "https://api.openai.com/v1")
+        client = OpenAI(api_key=api_key, base_url=base_url)
+
+        contexto_json = json.dumps(contexto, ensure_ascii=False, indent=2)
+        prompt = f"""
+        Eres un analista del MIDIS encargado del seguimiento de supervisiones.
+        Resume los acuerdos y puntos críticos del Anexo 5 en máximo 7 líneas.
+        Evita títulos. Usa lenguaje técnico y conciso.
+        Menciona:
+        - Problemas recurrentes.
+        - Áreas o roles más involucrados.
+        - Tipos de acuerdos más frecuentes.
+        - Plazos comunes o urgencias detectadas.
+        - Recomendaciones operativas para seguimiento.
+
+        CONTEXTO:
+        {contexto_json}
+        """
+
+        completion = client.chat.completions.create(
+            model="gpt-4o-mini",
+            temperature=0.4,
+            messages=[
+                {"role": "system", "content": "Eres un especialista en supervisión y seguimiento operativo del MIDIS."},
+                {"role": "user", "content": prompt}
+            ]
+        )
+
+        texto = completion.choices[0].message.content.strip()
+        return texto
+
+    except Exception as e:
+        return f"⚠️ Error al generar el análisis del Anexo 5: {e}"
