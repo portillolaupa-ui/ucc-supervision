@@ -178,8 +178,8 @@ def generate_anexo3_summary(contexto: dict) -> str:
         texto = completion.choices[0].message.content.strip()
         return texto
 
-    except Exception as e:
-        return f"⚠️ Error al generar el resumen del Anexo 3: {e}"
+    except Exception:
+        return "💬 ⚠️ No se pudo generar la interpretación automática"
 
 # ==============================================================
 # 💬 GENERADOR DE RESUMEN – ANEXO 4 (versión breve)
@@ -222,8 +222,8 @@ def generate_anexo4_summary(contexto: dict) -> str:
         texto = completion.choices[0].message.content.strip()
         return texto
 
-    except Exception as e:
-        return f"⚠️ Error al generar el resumen del Anexo 4: {e}"
+    except Exception:
+        return "💬 ⚠️ No se pudo generar la interpretación automática"
 
 # ==============================================================
 # 💬 GENERADOR DE ANÁLISIS – ANEXO 5 (ACUERDOS Y PUNTOS CRÍTICOS)
@@ -271,5 +271,5 @@ def generate_anexo5_summary(contexto: dict) -> str:
         texto = completion.choices[0].message.content.strip()
         return texto
 
-    except Exception as e:
-        return f"⚠️ Error al generar el análisis del Anexo 5: {e}"
+    except Exception:
+        return "💬 ⚠️ No se pudo generar la interpretación automática"
