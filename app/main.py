@@ -222,8 +222,8 @@ with st.spinner("Generando interpretación automática..."):
     try:
         interpretacion = generar_interpretacion_grafico(df_global, "Comparativo Global entre Anexos")
         placeholder_ia.markdown(f"<p style='color:#424242;font-style:italic;'>💬 {interpretacion}</p>", unsafe_allow_html=True)
-    except Exception as e:
-        placeholder_ia.warning(f"No se pudo generar la interpretación automática: {e}")
+    except Exception:
+        placeholder_ia.warning("💬 ⚠️ No se pudo generar la interpretación automática")
 
 
 # ==============================================================
