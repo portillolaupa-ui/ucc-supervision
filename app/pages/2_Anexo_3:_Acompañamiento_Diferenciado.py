@@ -24,7 +24,7 @@ st.set_page_config(
 )
 aplicar_estilos()
 
-st.title("Acompañamiento Diferenciado con Gestión Territorial")
+st.title("Acompañamiento Diferenciado")
 st.markdown("<br>", unsafe_allow_html=True)
 
 # ==============================================================
