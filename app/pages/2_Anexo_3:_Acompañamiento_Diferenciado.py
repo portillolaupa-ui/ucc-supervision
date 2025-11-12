@@ -187,7 +187,7 @@ else:
         """
 
     tarjetas_html += "</div>"
-    components.html(tarjetas_html, height=500, scrolling=False)
+    components.html(tarjetas_html, height=600, scrolling=True)
 
 # ==============================================================
 # 💬 RESUMEN AUTOMÁTICO (IA)
