@@ -35,60 +35,43 @@ def _get_model():
 # 🔎 INTERPRETACIÓN AUTOMÁTICA DE GRÁFICOS (IA)
 # ==============================================================
 
-def generar_interpretacion_grafico(df: pd.DataFrame, titulo: str) -> str:
+def generar_interpretacion_grafico(titulo: str, resumen_datos: str) -> str:
     """
-    Genera una breve interpretación automática de los resultados mostrados en un gráfico.
-    Retorna un texto corto (2-3 líneas) con tono institucional y lenguaje claro.
+    Genera una interpretación técnica breve (2–3 líneas) de un gráfico
+    basado en un resumen de datos en texto (df.to_string()).
     """
-    import streamlit as st
-    import json
-
     try:
-        from openai import OpenAI
-    except ImportError:
-        return "⚠️ No se pudo cargar la librería OpenAI."
+        client = _get_client()
+        modelo = _get_model()
 
-    api_key = st.secrets.get("openai_api_key")
-    base_url = st.secrets.get("openai_base_url")
-    model = st.secrets.get("openai_model", "openai/gpt-4o-mini")
+        prompt = f"""
+Eres un analista institucional del Programa JUNTOS – MIDIS Perú,
+especializado en supervisión y monitoreo territorial.
 
-    if not api_key or not base_url:
-        return "⚠️ Faltan credenciales de API en secrets.toml"
+Se te muestra un gráfico titulado "{titulo}", con resultados de supervisión
+de las fichas de campo (Anexos 2, 3 y 4).
 
-    client = OpenAI(api_key=api_key, base_url=base_url)
+Debes redactar una **interpretación técnica breve** (máximo 3 líneas) que:
+- Describa la tendencia general (niveles de cumplimiento, brechas o mejoras).
+- Destaque si existe una unidad territorial con valores altos o bajos.
+- Si hay un valor extremo (por ejemplo, 100%), menciónalo como posible sesgo puntual.
+- Use lenguaje institucional y objetivo, sin listas ni adjetivos enfáticos.
 
-    # Convertir el DataFrame en resumen compacto (para no saturar el modelo)
-    resumen = df.describe(include="all").to_string()
+Datos resumidos:
+{resumen_datos}
+"""
 
-    prompt = f"""
-    Eres un analista institucional del Programa JUNTOS – MIDIS Perú,
-    especializado en supervisión y monitoreo territorial.
-
-    Se te muestra un gráfico titulado "{titulo}", que resume resultados de supervisión 
-    de las fichas de campo (Anexos 2, 3 y 4).
-
-    Debes redactar una **interpretación técnica breve** (máximo 2 a 3 líneas) que:
-    - Describa la tendencia general de los resultados (mejoras, brechas, niveles de cumplimiento).
-    - Destaque si existe una unidad territorial con valores significativamente altos o bajos.
-    - Si hay un valor extremo (por ejemplo, 100%), menciónalo como posible **sesgo o efecto puntual**.
-    - Use lenguaje institucional, objetivo y profesional.
-    - Evite adjetivos enfáticos o coloquiales.
-    - Mantenga el estilo de informes técnicos (como los del MIDIS o MEF).
-
-    Datos resumidos:
-    {resumen}
-    """
-
-    try:
         respuesta = client.chat.completions.create(
-            model=model,
-            messages=[{"role": "user", "content": prompt}],
-            max_tokens=120,
-            temperature=0.4
+            model=modelo,
+            messages=[
+                {"role": "system", "content": "Eres un analista institucional experto en monitoreo territorial."},
+                {"role": "user", "content": prompt},
+            ],
+            max_tokens=160,
+            temperature=0.4,
         )
 
-        texto = respuesta.choices[0].message.content.strip()
-        return texto
+        return respuesta.choices[0].message.content.strip()
 
     except Exception as e:
         return f"⚠️ No se pudo generar la interpretación automática: {e}"
