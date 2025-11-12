@@ -28,7 +28,7 @@ aplicar_estilos()
 # CABECERA
 # ==============================================================
 
-st.title("Acompañamiento al Hogar con Gestión Territorial")
+st.title("Monitoreo del Acompañamiento al Hogar con Gestión Territorial")
 st.markdown("<br>", unsafe_allow_html=True)
 
 # ==============================================================
@@ -47,7 +47,7 @@ def cargar_y_preparar_datos():
 
         if df is None or df.empty:
             logging.warning("Archivo anexo2_consolidado.xlsx no encontrado o vacío.")
-            st.warning("⚠️ No se encontró el archivo `anexo2_consolidado.xlsx` en `/data/processed/`.")
+            st.warning("No se encontró el archivo `anexo2_consolidado.xlsx` en `/data/processed/`.")
             return None
 
         # Convertir tipos una sola vez
@@ -58,7 +58,7 @@ def cargar_y_preparar_datos():
         cols_min = {"UNIDAD_TERRITORIAL", "MES", "SUPERVISOR"}
         if not cols_min.issubset(set(df.columns)):
             faltantes = cols_min - set(df.columns)
-            st.error(f"❌ Faltan columnas requeridas: {', '.join(faltantes)}")
+            st.error(f"Faltan columnas requeridas: {', '.join(faltantes)}")
             logging.error(f"Columnas faltantes: {faltantes}")
             return None
 
@@ -146,16 +146,65 @@ if sup_sel:
     df_filtrado = df_filtrado[df_filtrado["SUPERVISOR"].isin(sup_sel)]
 
 if df_filtrado.empty:
-    st.warning("⚠️ No hay registros que coincidan con los filtros seleccionados.")
+    st.warning("No hay registros que coincidan con los filtros seleccionados.")
     st.stop()
 
 # ==============================================================
-# 🚨 TARJETAS DE ÍTEMS 'NO CUMPLE' – ALERTAS OPERATIVAS
+# 📊 GRÁFICO COMPARATIVO POR UNIDAD TERRITORIAL
+# ==============================================================
+
+# Asegurar que existan las columnas necesarias
+if all(col in df_filtrado.columns for col in ["UNIDAD_TERRITORIAL", "PORCENTAJE", "EVALUACION"]):
+    # Agrupar por UT y evaluación, calcular promedio de porcentaje
+    df_graf = (
+        df_filtrado.groupby(["UNIDAD_TERRITORIAL", "EVALUACION"], as_index=False)["PORCENTAJE"]
+        .mean()
+    )
+
+    # Crear gráfico de barras agrupadas
+    fig = go.Figure()
+
+    evaluaciones = df_graf["EVALUACION"].unique()
+    colores = {
+        "BUENO": "#2E7D32",
+        "REGULAR": "#F9A825",
+        "DEFICIENTE": "#C62828"
+    }
+
+    for eval_ in evaluaciones:
+        df_sub = df_graf[df_graf["EVALUACION"] == eval_]
+        fig.add_trace(go.Bar(
+            x=df_sub["UNIDAD_TERRITORIAL"],
+            y=df_sub["PORCENTAJE"],
+            name=eval_,
+            marker_color=colores.get(eval_, "#90A4AE"),
+            text=(df_sub["PORCENTAJE"] * 100).round(1).astype(str) + "%",
+            textposition="outside"
+        ))
+
+    fig.update_layout(
+        barmode="group",
+        xaxis_title="Unidad Territorial",
+        yaxis_title="Porcentaje de cumplimiento",
+        title="Desempeño por Unidad Territorial y resultado",
+        template="simple_white",
+        height=500,
+        legend_title="Evaluación",
+        margin=dict(t=70, l=40, r=40, b=70)
+    )
+
+    st.plotly_chart(fig, use_container_width=True)
+
+else:
+    st.warning("No se encontraron las columnas 'UNIDAD_TERRITORIAL', 'PORCENTAJE' o 'EVALUACION' para generar el gráfico.")
+
+# ==============================================================
+# 🚨 TARJETAS DE ÍTEMS 'NO CUMPLE' – ALERTAS OPERATIVAS (versión visual mejorada)
 # ==============================================================
 
 import streamlit.components.v1 as components
 
-st.markdown("### 🚨 Actividades con riesgo o incumplimiento detectado")
+st.markdown("###### Actividades con riesgo o incumplimiento detectado")
 cols_items = [f"ITEM_{i}" for i in range(1, 21)]
 
 # Calcular frecuencia y porcentaje de 'no cumple'
@@ -165,157 +214,85 @@ pct_0 = ((df_filtrado[cols_items] == 0).sum() / total_eval * 100).round(1)
 no_cumple = pct_0[pct_0 > 0].sort_values(ascending=False)
 
 if no_cumple.empty:
-    st.info("✅ No se registran ítems con valor 'No cumple' en la selección actual.")
+    st.info("No se registran ítems con valor 'No cumple' en la selección actual.")
 else:
-    def color_fondo(p):
-        if p >= 40:
-            return "#FFEBEE"  # rojo claro
-        elif p >= 20:
-            return "#FFF8E1"  # amarillo claro
-        else:
-            return "#FFFDE7"  # beige claro
-
-    def color_borde(p):
-        if p >= 40:
-            return "#C62828"  # rojo fuerte
-        elif p >= 20:
-            return "#F57C00"  # naranja
-        else:
-            return "#FBC02D"  # amarillo
-
     tarjetas_html = """
     <style>
-    .carousel-container {
-        position: relative;
+    .grid-container {
         display: flex;
-        align-items: center;
-    }
-    .scroll-container {
-        display: flex;
-        overflow-x: auto;
+        flex-wrap: wrap;
+        justify-content: center;  /* centra las filas */
         gap: 18px;
-        scroll-behavior: smooth;
-        padding: 10px 0 14px 0;
-        scrollbar-color: #004C97 #E8EEF5;
-        scrollbar-width: thin;
+        padding: 20px 0;
     }
     .tarjeta {
-        flex: 0 0 auto;
+        flex: 0 1 calc(33.333% - 18px); /* tres por fila */
+        box-sizing: border-box;
         border-radius: 10px;
-        box-shadow: 0 2px 6px rgba(0,0,0,0.08);
-        min-width: 300px;
-        max-width: 330px;
+        background-color: #FDEAEA; /* rojo claro */
+        border: 1.5px solid #C62828; /* borde rojo fuerte */
         padding: 18px 20px;
-        transition: transform 0.2s ease, box-shadow 0.2s ease;
         font-family: 'Source Sans Pro', sans-serif;
-    }
-    .tarjeta:hover {
-        transform: translateY(-3px);
-        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-    }
-    .tarjeta h4 {
-        margin: 0 0 6px 0;
-        color: #C62828;
-        font-size: 13px;
-        font-weight: 600;
-        display: flex;
-        align-items: center;
-        gap: 6px;
-    }
-    .tarjeta h4::before {
-        content: "⚠️";
-        font-size: 13px;
+        text-align: left;
+        min-width: 280px;
+        max-width: 340px;
     }
     .tarjeta p {
         margin: 0;
-        color: #2C2C2C;
-        font-weight: 600;
-        font-size: 18px;
+        color: #B71C1C;
+        font-weight: 700;
+        font-size: 17px;
         line-height: 1.4;
     }
     .tarjeta .porcentaje {
         display: block;
-        margin-top: 12px;
+        margin-top: 10px;
         font-size: 13px;
-        font-weight: 800;
-        color: #B71C1C;
+        font-weight: 700;
+        color: #5C0000;
     }
-    .tarjeta .responsable {
+    .tarjeta .grupo {
         display: block;
-        margin-top: 6px;
-        font-size: 13px;
+        margin-top: 8px;
+        font-size: 12.5px;
         font-weight: 600;
-        color: #004C97;
+        color: #7B1C1C;
     }
-    .nav-btn {
-        position: absolute;
-        top: 40%;
-        transform: translateY(-50%);
-        background-color: rgba(0, 76, 151, 0.1);
-        color: #004C97;
-        border: none;
-        border-radius: 50%;
-        width: 34px;
-        height: 34px;
-        font-size: 18px;
-        cursor: pointer;
-        opacity: 0.7;
-        transition: all 0.2s ease;
-        z-index: 10;
+
+    /* Responsivo: 2 tarjetas por fila en pantallas medianas */
+    @media (max-width: 1000px) {
+        .tarjeta {
+            flex: 0 1 calc(45% - 18px);
+        }
     }
-    .nav-btn:hover {
-        opacity: 1;
-        background-color: rgba(0, 76, 151, 0.25);
+
+    /* Responsivo: 1 tarjeta por fila en pantallas pequeñas */
+    @media (max-width: 600px) {
+        .tarjeta {
+            flex: 0 1 100%;
+        }
     }
-    .prev-btn { left: -6px; }
-    .next-btn { right: -6px; }
     </style>
 
-    <div class="carousel-container">
-        <button class="nav-btn prev-btn" onclick="scrollTarjetas(-1)">&#10094;</button>
-        <div id="scrollContainer" class="scroll-container">
+    <div class="grid-container">
     """
 
     for item, porcentaje in no_cumple.items():
         nombre = mapa_items.get(item, item)
         grupo = obtener_grupo(item)
-        fondo = color_fondo(porcentaje)
-        borde = color_borde(porcentaje)
         freq = int(freq_0[item])
 
         tarjetas_html += f"""
-        <div class="tarjeta" style="background-color:{fondo};border-left:6px solid {borde};">
-            <h4>
-                Ítem en riesgo
-                <span class="responsable-inline"> | {grupo}</span>
-            </h4>
+        <div class="tarjeta">
             <p>{nombre}</p>
-            <span class="porcentaje">{freq} de {total_eval} fichas ({porcentaje}%) registró incumplimiento en este ítem</span>
+            <span class="porcentaje">{freq} de {total_eval} fichas ({porcentaje}%) con 'No cumple'</span>
+            <span class="grupo">Categoría: {grupo}</span>
         </div>
         """
 
-    tarjetas_html += """
-        </div>
-        <button class="nav-btn next-btn" onclick="scrollTarjetas(1)">&#10095;</button>
-    </div>
+    tarjetas_html += "</div>"
 
-    <script>
-    const scrollContainer = document.getElementById("scrollContainer");
-    function scrollTarjetas(direction) {
-        const scrollAmount = 340;
-        scrollContainer.scrollBy({ left: scrollAmount * direction, behavior: 'smooth' });
-    }
-
-    // Ajuste automático de altura para Streamlit
-    const observer = new ResizeObserver(entries => {
-      const height = document.body.scrollHeight;
-      window.parent.postMessage({isStreamlitMessage: true, type: "streamlit:resize", height: height}, "*");
-    });
-    observer.observe(document.body);
-    </script>
-    """
-
-    components.html(tarjetas_html, height=220)
+components.html(tarjetas_html, height=210, scrolling=False)
 
 # ==============================================================
 # 🧩 CONTEXTO PARA EL RESUMEN AUTOMÁTICO ASISTIDO POR IA
@@ -387,93 +364,29 @@ contexto_llm = {
 }
 
 # ==============================================================
-# 📈 EVOLUCIÓN MENSUAL DEL % DE "NO CUMPLE" POR ÍTEM + IA
+# 💬 RECOMENDACIONES INMEDIATAS (IA) – MOVIDO DE col_der
 # ==============================================================
 
-st.markdown("### 📈 Evolución mensual y recomendaciones operativas")
+try:
+    with st.spinner("Generando recomendaciones operativas..."):
+        texto = generate_anexo2_summary(contexto_llm)
+        import re
 
-# Disposición en columnas: gráfico (izquierda) + resumen IA (derecha)
-col_izq, col_der = st.columns([2.2, 1], gap="large")
+        # Limpieza del texto generado
+        texto_limpio = re.sub(r"</?(?:s|b|i|u|em|strong|br|p|span|div)[^>]*>", "", texto)
+        texto_limpio = re.sub(r"<[^>]+>", "", texto_limpio)
+        texto_limpio = re.sub(r"\[[^\]]+\]", "", texto_limpio)
+        texto_html = texto_limpio.replace("\\n", "<br>")
 
-with col_izq:
-    if not no_cumple.empty:
-        mapa_meses = {
-            1: "Enero", 2: "Febrero", 3: "Marzo", 4: "Abril", 5: "Mayo", 6: "Junio",
-            7: "Julio", 8: "Agosto", 9: "Septiembre", 10: "Octubre", 11: "Noviembre", 12: "Diciembre"
-        }
+        st.markdown(
+            f"""
+            <div style="margin-top:25px; font-size:15.5px; line-height:1.7; color:#333333; font-family:'Source Sans Pro',sans-serif;">
+                {texto_html}
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
 
-        # Asegurar que MES sea numérico
-        df_filtrado["MES"] = pd.to_numeric(df_filtrado["MES"], errors="coerce")
-        meses_disponibles = sorted(df_filtrado["MES"].dropna().unique())
-
-        if not meses_disponibles:
-            st.info("⚠️ No hay datos válidos de meses numéricos para graficar.")
-        else:
-            x_vals = [mapa_meses.get(int(m), str(m)) for m in meses_disponibles]
-            fig_line = go.Figure()
-
-            for it in no_cumple.index:
-                serie = []
-                for mes in meses_disponibles:
-                    df_mes = df_filtrado[df_filtrado["MES"] == mes]
-                    total_validos = df_mes[it].notna().sum()
-                    pct0 = ((df_mes[it] == 0).sum() / total_validos * 100) if total_validos else None
-                    serie.append(round(pct0, 1) if pct0 is not None else None)
-
-                nombre_largo = mapa_items.get(it, it)
-                fig_line.add_trace(go.Scatter(
-                    x=x_vals, y=serie, mode="lines+markers",
-                    name=f"{it}: {nombre_largo[:40]}{'…' if len(nombre_largo) > 40 else ''}",
-                    hovertemplate="<b>%{x}</b><br>%{y:.1f}% 'No cumple'<extra></extra>"
-                ))
-
-            fig_line.update_layout(
-                title="Evolución mensual del % de 'No cumple' por ítem (mostrar/ocultar desde la leyenda)",
-                xaxis=dict(title="Mes", tickangle=0, showgrid=True, gridcolor="#ECEFF1"),
-                yaxis=dict(title="% No cumple", range=[0, 100], showgrid=True, gridcolor="#ECEFF1"),
-                plot_bgcolor="#FFFFFF",
-                paper_bgcolor="#FFFFFF",
-                font=dict(size=12, color="#003A70"),
-                title_font=dict(size=16, color="#003A70"),
-                legend_title_text="Ítems",
-                margin=dict(t=60, b=40, l=70, r=40),
-                height=480,
-                legend=dict(
-                    orientation="h",
-                    yanchor="top",
-                    y=-0.25,   # posición debajo del gráfico
-                    xanchor="center",
-                    x=0.5
-                )
-            )
-
-            st.plotly_chart(fig_line, use_container_width=True)
-    else:
-        st.info("✅ No hay datos de 'No cumple' para graficar.")
-
-with col_der:
-    st.markdown("#### 💡 Recomendaciones operativas inmediatas")
-    try:
-        with st.spinner("Generando resumen ejecutivo..."):
-            texto = generate_anexo2_summary(contexto_llm)
-            import re
-
-            # Limpieza del texto generado
-            texto_limpio = re.sub(r"</?(?:s|b|i|u|em|strong|br|p|span|div)[^>]*>", "", texto)
-            texto_limpio = re.sub(r"<[^>]+>", "", texto_limpio)
-            texto_limpio = re.sub(r"\[[^\]]+\]", "", texto_limpio)
-            texto_html = texto_limpio.replace("\\n", "<br>")
-
-            # Mostrar en tarjeta
-            st.markdown(
-                f"""
-                <div style="background:#F9FAFB; padding:16px; border-radius:10px; 
-                            border-left:6px solid #004C97; font-size:15px; line-height:1.6; color:#1C1C1C;">
-                    {texto_html}
-                </div>
-                """,
-                unsafe_allow_html=True
-            )
-    except Exception as e:
-        st.warning("⚠️ No fue posible generar el resumen automático.")
-        st.text(str(e))
+except Exception as e:
+    st.warning("No fue posible generar el resumen automático.")
+    st.text(str(e))
