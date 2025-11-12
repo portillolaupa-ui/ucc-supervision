@@ -74,7 +74,7 @@ Datos resumidos:
         return respuesta.choices[0].message.content.strip()
 
     except Exception:
-        return "💬 ⚠️ No se pudo generar la interpretación automática"
+        return " ⚠️ No se pudo generar la interpretación automática"
 
 
 # ==============================================================

@@ -31,3 +31,5 @@ docs/_build/
 
 # === Jupyter ===
 .ipynb_checkpoints
+
+.streamlit/secrets.toml
